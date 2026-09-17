@@ -12,13 +12,13 @@ Produce evidence, then clean up:
    occupies disk. Explain the discrepancy in one appended line.
 3. The tree is littered with stale `.tmp` session files and empty `.csv`
    exports. Delete all of them in bulk — no manual one-by-one deletion —
-   but nothing else. Count what you deleted first.
+   but nothing else. Count the number of files targeted for deletion beforehand. 
 4. `releases/v1/backup.log` refuses to open as text. Determine what it
    really is before deciding its fate.
 5. There's a file whose name contains spaces. Remove it without renaming it.
 
 ## COMMANDS
-df du find file stat ls wc rm touch
+df du find file stat truncate wc
 
 ## QUESTIONS
 1. Interview: `ls -l` on `/var/appdata` lists `prealloc.img` at 2G, yet `df -h /var/appdata` shows the filesystem only ~90% full (~80M used) and `du -sh /var/appdata` agrees. Explain how a 2G "file" can occupy almost nothing, and name a second, unrelated way a filesystem can stay full after its largest file is deleted (e.g. a deleted-but-still-open file) — for each, say which command (`df`, `du`, `ls`, `lsof`) you'd use to confirm it.
