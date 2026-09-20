@@ -12,7 +12,7 @@ HISTORY="$ROOT/.gym-history"   # append-only: date  key  grade  old_box  new_box
 TODAY=$(date +%F)
 INTERVALS=(0 1 2 4 8 16)   # days by box (index 1..5)
 
-b=$'\e[1m'; d=$'\e[2m'; c=$'\e[36m'; g=$'\e[32m'; y=$'\e[33m'; r=$'\e[0m'; clr=$'\e[2J\e[H'
+b=$'\e[1m'; d=$'\e[2m'; c=$'\e[36m'; g=$'\e[32m'; y=$'\e[33m'; s=$'\e[34m'; it=$'\e[3m'; r=$'\e[0m'; clr=$'\e[2J\e[H'
 
 usage(){
   cat <<'EOF'
@@ -69,31 +69,37 @@ pick_scenario(){
   done
   ((${#due[@]})) || { printf '%sNothing due today. \U0001F389%s\n' "$g" "$r"; exit 0; }
   printf '%sToday'\''s Tickets%s\n\n' "$b" "$r"
-  local i=1
+  local i=1 width=0
   for gm in "${due[@]}"; do
-    local key box; key=$(dirname "${gm#./}"); box=$(led_field "$key" 2)
-    printf '  %s%d%s  %s  %s%s%s\n' "$c" "$i" "$r" "$key" "$d" "${box:+box $box}" "$r"; ((i++))
+    local key; key=$(dirname "${gm#./}")
+    ((${#key} > width)) && width=${#key}
   done
-  printf '\nPick: '; read -r n
+  for gm in "${due[@]}"; do
+    local key box next_box next_days; key=$(dirname "${gm#./}"); box=$(led_field "$key" 2); box=${box:-1}
+    next_box=$(( box+1>5 ? 5 : box+1 )); next_days=${INTERVALS[$next_box]}
+    printf '  %s%d%s  %-*s      %s%sAgain in %s days%s\n' "$c" "$i" "$r" "$width" "$key" "$s" "$it" "$next_days" "$r"; ((i+=1))
+  done
+  printf '\nPick (q to quit): '; read -r n
+  [[ "$n" == q ]] && return 1
   [[ "$n" =~ ^[0-9]+$ ]] && (( n>=1 && n<=${#due[@]} )) || { echo "bad pick"; exit 1; }
   GUIDE="$ROOT/${due[$((n-1))]#./}"
 }
 
-if (($#)); then
+pick_requested_guide(){
   key=${1%/}; key=${key#pool/}
   GUIDE="$ROOT/pool/$key/guide.md"
   [[ -f "$GUIDE" ]] || { echo "ticket not found: $1"; exit 1; }
-else
-  pick_scenario
-fi
-KEY=$(dirname "${GUIDE#$ROOT/}")
+}
 
 # ── parse guide.md ─────────────────────────────────────────────────
-TITLE=$(awk 'NR==1{sub(/^# /,""); print; exit}' "$GUIDE")
+load_guide(){
+  KEY=$(dirname "${GUIDE#$ROOT/}")
+  TITLE=$(awk 'NR==1{sub(/^# /,""); print; exit}' "$GUIDE")
+  TICKET=$(section TICKET)
+  COMMANDS=$(section COMMANDS | tr -s ' \n' ' ' | sed 's/^ *//;s/ *$//')
+  QUESTIONS=$(section QUESTIONS)
+}
 section(){ awk -v s="## $1" '$0==s{f=1;next} /^## /{f=0} f' "$GUIDE"; }
-TICKET=$(section TICKET)
-COMMANDS=$(section COMMANDS | tr -s ' \n' ' ' | sed 's/^ *//;s/ *$//')
-QUESTIONS=$(section QUESTIONS)
 
 # ── paged render loop ──────────────────────────────────────────────
 nav(){
@@ -120,9 +126,21 @@ grade_prompt(){
   esac
 }
 
-view=t
-while :; do
-  case "$view" in t) page_ticket;; c) page_commands;; q) page_questions;; esac
-  read -rsn1 k
-  case "$k" in t|c|q) view=$k;; x) grade_prompt; break;; esac
-done
+run_guide(){
+  load_guide
+  local view=t k
+  while :; do
+    case "$view" in t) page_ticket;; c) page_commands;; q) page_questions;; esac
+    read -rsn1 k
+    case "$k" in t|c|q) view=$k;; x) grade_prompt; break;; esac
+  done
+}
+
+if (($#)); then
+  pick_requested_guide "$1"
+  run_guide
+else
+  while pick_scenario; do
+    run_guide
+  done
+fi
