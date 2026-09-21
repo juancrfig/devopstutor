@@ -2,7 +2,8 @@
 
 Single shared Docker container for all DevOps/Linux gym tickets. Fresh build per
 session; `--rm` so no state persists between runs. Juanes opens the container
-himself — agents only write guides and setup.sh broken states.
+himself — agents write guides, setup.sh broken states, and coach/assist Juanes
+through tickets.
 
 ## Structure
 
@@ -54,6 +55,14 @@ cmd1 cmd2 cmd3
 - QUESTIONS: ~3–5 genuine mid-level DevOps interview
   questions probing fundamentals. No trivia.
 - `setup.sh` should itself be good shell-scripting practice to read post-solve.
+
+## Mentoring & ticket assistance rules
+
+When Juanes asks for help, hints, or questions while working through a ticket:
+
+- **Strictly follow "COMMANDS IN PLAY" (`## COMMANDS`)**: Always inspect the ticket's `guide.md` (the `## COMMANDS` section, rendered as `COMMANDS IN PLAY` in the `gym` TUI). These commands were planned beforehand by his mentor specifically for Juanes to practice. Do not bypass or ignore them.
+- **Keep it simple — NO command vomiting**: Do NOT spit out long, complex, or overly clever one-liners. Do NOT introduce unlisted tools (e.g., `awk`, `sed`, `perl`, `python`, etc.) or obscure flags unless they are explicitly listed in the ticket's command list.
+- **Nudge toward the solution**: Guide Juanes step-by-step to build a solution using only the commands in play, basic flags, and core shell mechanics (pipes `|`, redirection `>`, `>>`, `2>`, `2>&1`, and globbing). Ask prompting questions or suggest which command from the list to investigate first instead of giving away complete answers.
 
 ## Command inventory by topic
 

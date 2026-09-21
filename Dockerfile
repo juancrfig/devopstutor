@@ -16,7 +16,9 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/excludes \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash juanes \
-    && echo 'juanes ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/juanes
+    && echo 'juanes ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/juanes \
+    && printf 'set bell-style none\n' > /home/juanes/.inputrc \
+    && chown juanes:juanes /home/juanes/.inputrc
 
 COPY setup.sh /setup.sh
 RUN chmod +x /setup.sh && /setup.sh

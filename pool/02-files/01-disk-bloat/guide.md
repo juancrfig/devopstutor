@@ -18,7 +18,7 @@ Produce evidence, then clean up:
 5. There's a file whose name contains spaces. Remove it without renaming it.
 
 ## COMMANDS
-df du find file stat truncate wc
+df du find file stat truncate wc xargs -print0
 
 ## QUESTIONS
 1. Interview: `ls -l` on `/var/appdata` lists `prealloc.img` at 2G, yet `df -h /var/appdata` shows the filesystem only ~90% full (~80M used) and `du -sh /var/appdata` agrees. Explain how a 2G "file" can occupy almost nothing, and name a second, unrelated way a filesystem can stay full after its largest file is deleted (e.g. a deleted-but-still-open file) — for each, say which command (`df`, `du`, `ls`, `lsof`) you'd use to confirm it.
