@@ -55,6 +55,12 @@ cmd1 cmd2 cmd3
 - QUESTIONS: ~3–5 genuine mid-level DevOps interview
   questions probing fundamentals. No trivia.
 - `setup.sh` should itself be good shell-scripting practice to read post-solve.
+- Every step must be doable in the container, and every claim the ticket
+  states as fact must be true there. `## COMMANDS` must cover each step.
+  Files Juanes should manage as himself belong to `juanes`; account and
+  ownership work (04-users-perms) needs `sudo`. Never rely on host facts
+  (uptime, cores, RAM) matching a claim — make lies unmistakable.
+  Rebuild and walk the ticket before committing.
 
 ## Mentoring & ticket assistance rules
 
@@ -69,10 +75,10 @@ When Juanes asks for help, hints, or questions while working through a ticket:
 | Topic | Commands | Tickets |
 |---|---|---|
 | 01-orientation | whoami who w hostname uname uptime date free lscpu history command -v cat echo | 01-amnesia-shift |
-| 02-files | ls find file stat wc du df touch rm | 01-disk-bloat, 02-mystery-artifacts |
-| 03-text | cat head tail grep sort cut tr xargs wc echo | 01-log-triage, 02-csv-rescue |
-| 04-users-perms | groups adduser deluser chmod chown chgrp su usermod id find ls stat | 01-offboard-onboard, 02-perm-meltdown |
-| 05-processes | ps pgrep kill fg bg pstree | 01-log-flood, 02-immortal-daemon |
+| 02-files | ls find file stat wc du df touch rm sort head | 01-disk-bloat, 02-mystery-artifacts |
+| 03-text | cat head tail grep sort uniq cut tr xargs wc echo mkdir | 01-log-triage, 02-csv-rescue |
+| 04-users-perms | groups adduser deluser chmod chown chgrp su usermod id find ls stat rm cat touch | 01-offboard-onboard, 02-perm-meltdown |
+| 05-processes | ps pgrep kill fg bg jobs sleep pstree | 01-log-flood, 02-immortal-daemon |
 | 06-services | systemctl journalctl — **parked**: plain container has no systemd PID 1. Unpark plan: systemd-as-PID-1 image run with `--cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup` (or podman). Until then, systemd theory rides in 05-processes questions. | — |
 
 ## Planned topics (near future)

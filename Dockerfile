@@ -7,7 +7,7 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/excludes \
     && apt-get install -y --no-install-recommends \
        sudo procps psmisc file adduser man-db manpages \
        less vim curl wget ca-certificates bash-completion \
-       iproute2 dnsutils tmux cron \
+       iproute2 dnsutils tmux cron lsof perl \
     && dpkg-divert --remove /usr/bin/man \
     && cp -f /usr/bin/man.REAL /usr/bin/man 2>/dev/null || true \
     && apt-get install --reinstall -y --no-install-recommends \

@@ -20,7 +20,7 @@ alphabetically sorted, no header, no blanks.
    must be silenced, not sprayed on the terminal.
 
 ## COMMANDS
-cat file wc tr cut sort grep xargs echo head tail
+cat file wc tr cut sort grep xargs mkdir echo head tail
 
 ## QUESTIONS
 1. Interview: what actually is a "line" to Unix tools? What are `\n` and `\r` at the byte level, and why does a stray `\r` make `grep pattern$` mysteriously fail?

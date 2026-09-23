@@ -21,7 +21,7 @@ Restore sanity, then prove it:
    and that a random other user can read none of the secrets.
 
 ## COMMANDS
-ls stat chmod chown chgrp su id find groups
+ls stat chmod chown chgrp su id find groups cat touch
 
 ## QUESTIONS
 1. Interview: for a *directory*, what exactly do r, w, and x each allow? Why does `x` without `r` on a directory still work if you know a filename inside?

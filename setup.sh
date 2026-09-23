@@ -13,7 +13,7 @@ orientation_amnesia_shift() {
   cat > /etc/motd <<'EOF'
 === HANDOVER — Dana (off to vacation, unreachable) ===
 Box: CentOS 7, 64 cores, 128G RAM.
-Rebooted it an hour ago after the kernel patch, all clean.
+Kernel patched live -- 400+ days uptime, never rebooted.
 Shell is zsh for everyone. Nothing weird in my session history.
 Good luck!
 EOF
@@ -61,6 +61,10 @@ files_disk_bloat() {
 
   # A filename with spaces, because the real world has those.
   printf 'draft\n' > "$root/releases/v1/final report (copy).txt"
+
+  # Created as root at runtime; hand the tree to the on-call admin so the
+  # cleanup steps work without sudo.
+  chown -R juanes:juanes "$root"
 }
 
 # ══ 02-files / 02-mystery-artifacts ════════════════════════════════
@@ -116,9 +120,12 @@ text_log_triage() {
   cat > /usr/local/bin/traffic-writer <<'EOF'
 #!/bin/bash
 # Appends one access-log line every 2s. Started from /etc/bash.bashrc.
+# Live 500s land on /checkout only, matching the historical pattern.
 while true; do
-  printf '%s - - [%s] "GET /api/cart HTTP/1.1" %s 512\n' \
-    "203.0.113.7" "$(date -Is)" "$(( RANDOM % 6 == 0 ? 500 : 200 ))" \
+  if (( RANDOM % 6 == 0 )); then path=/checkout status=500
+  else path=/api/cart status=200; fi
+  printf '%s - - [%s] "GET %s HTTP/1.1" %s 512\n' \
+    "203.0.113.7" "$(date -Is)" "$path" "$status" \
     >> /var/log/shop/access.log
   sleep 2
 done
@@ -146,6 +153,11 @@ Li Wei;LI.WEI@ACME.IO;platform
 Noor Khan;NOOR.KHAN@ACME.IO;sre
 EOF
   chmod a+rwX /srv/export
+
+  # Per-team CRM configs: payments has none yet, so a lookup must fail.
+  mkdir -p /etc/crm
+  printf 'owner=platform-leads\n' > /etc/crm/platform.conf
+  printf 'owner=sre-oncall\n'     > /etc/crm/sre.conf
 }
 
 # ══ 04-users-perms / 01-offboard-onboard ═══════════════════════════
@@ -161,6 +173,7 @@ users_offboard_onboard() {
   printf 'post-deploy\n'    > /usr/local/lib/hooks/notify.sh
   printf 'scratch\n'        > /tmp/contractor-scratch.txt
   chown contractor:devs /srv/project/api/server.py /srv/project/api/.env
+  chmod 640 /srv/project/api/.env   # secrets: team-readable only
   chown contractor:contractor /usr/local/lib/hooks/notify.sh /tmp/contractor-scratch.txt
 }
 
@@ -243,7 +256,11 @@ while true; do
 done
 EOF
   chmod 755 /usr/local/bin/watchdog /usr/local/bin/watchdog-nanny
-  touch /var/log/watchdog.log
+  # The last admin's failed polite attempts, a couple of days back.
+  local ago
+  for ago in '2 days ago 14:05' '2 days ago 14:06' '1 day ago 09:40'; do
+    echo "$(date -Is -d "$ago") watchdog: refusing to die"
+  done > /var/log/watchdog.log
   chmod 666 /var/log/watchdog.log
 }
 

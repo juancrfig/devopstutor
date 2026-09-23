@@ -3,7 +3,7 @@
 ## TICKET
 Disk-growth alerts again — but this time it's not old files. Something on
 this box is *actively* writing garbage into `/var/log/shop/debug.log`,
-hundreds of lines a minute, right now. Nobody deployed a debug build.
+over a thousand lines a minute, right now. Nobody deployed a debug build.
 There's also a report that one entry in the process table looks "undead."
 
 1. Confirm the flood is live and measure it: how many lines arrive in ten
@@ -21,7 +21,7 @@ There's also a report that one entry in the process table looks "undead."
    it. Note which keystroke and which commands did each step.
 
 ## COMMANDS
-ps pgrep pstree kill fg bg wc tail grep
+ps pgrep pstree kill fg bg jobs sleep wc tail grep
 
 ## QUESTIONS
 1. Interview: what is a zombie process really — what resource does it still hold, who is responsible for cleaning it up, and when do thousands of zombies indicate an application bug?

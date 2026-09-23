@@ -19,7 +19,7 @@ up section by section (append — don't clobber your own report):
    the abuse desk, and record how many lines that is in the report.
 
 ## COMMANDS
-tail head cat grep cut sort wc echo tr
+tail head cat grep cut sort uniq wc echo tr
 
 ## QUESTIONS
 1. Interview: explain what a pipe actually connects, in terms of stdin/stdout/stderr. If the first command in a pipeline dies halfway, what does the second one see?

@@ -21,7 +21,7 @@ requires a full audit trail before anything is destroyed.
    confirm she can actually read the project's `.env` file.
 
 ## COMMANDS
-find chown chgrp adduser deluser groups usermod su id ls
+find chown chgrp adduser deluser groups usermod su id ls rm cat
 
 ## QUESTIONS
 1. Interview: what happens to a user's running processes and files when you delete the account? Why do offboarding runbooks kill sessions and reassign files *before* `deluser`?
