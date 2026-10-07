@@ -15,6 +15,12 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/excludes \
        gpgv mount \
     && rm -rf /var/lib/apt/lists/*
 
+# The package layer above is FROZEN: editing it forces a ~10 min rebuild on
+# every machine. New tickets that need packages append their own small layer
+# here instead, e.g.:
+#   RUN apt-get update && apt-get install -y --no-install-recommends <pkg> \
+#       && rm -rf /var/lib/apt/lists/*
+
 RUN useradd -m -s /bin/bash juanes \
     && echo 'juanes ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/juanes \
     && printf 'set bell-style none\n' > /home/juanes/.inputrc \

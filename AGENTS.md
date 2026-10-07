@@ -32,7 +32,10 @@ devops_gym/
 ## Adding a ticket
 
 1. `pool/<topic>/<scenario>/guide.md` — follow the format below.
-2. Add broken state to `setup.sh`.
+2. Add broken state to `setup.sh`. If the ticket needs a new package, append
+   a new small `RUN apt-get install` layer below the frozen package layer in
+   the Dockerfile. Never edit the frozen layer: that forces a ~10 min full
+   rebuild on every machine.
 3. `./run.sh` — verify the broken state lands correctly.
 
 ## guide.md format (parsed by `gym`)
