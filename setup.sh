@@ -387,6 +387,143 @@ EOS
   as_juanes sed -i 's/memory: 256Mi/memory: 512Mi/' "$repo/deploy.yaml"
 }
 
+# ══ 08-search / 01-leaked-secret ═══════════════════════════════════
+
+# The leaked password ends in '$' and holds a '.', so a plain pattern search
+# misses every real hit (trailing '$' anchors to end of line) and matches the
+# staging decoy (the '.' matches '_'). Only a fixed-string search gets 8 files.
+readonly LEAKED_PW='Tr0ub4dor.3$'
+
+search_leaked_secret() {
+  local app=/srv/shop etc=/etc/shop
+
+  # ── config tree, owned by root ──────────────────────────────────────
+  mkdir -p "$etc/secrets.d"
+  cat > "$etc/shop.conf" <<EOF
+# Shop core config (managed by platform team)
+# SECRETS_BACKEND=vault   # TODO: turn on after the migration
+
+db_host = db.acme.io
+db_user = app
+db_password = $LEAKED_PW
+OLD_DB_PASSWORD_HINT = ask-dana
+
+log_level = info
+EOF
+  cp "$etc/shop.conf" "$etc/shop.conf~"   # editor backup, changed yesterday
+  cat > "$etc/staging.conf" <<'EOF'
+# Staging: not affected by the leak
+DB_PASSWORD=Tr0ub4dor_3
+log_level = debug
+EOF
+  cat > "$etc/payments.conf" <<'EOF'
+SECRETS_BACKEND=vault
+db_password_ref = vault:shop/payments
+EOF
+  printf 'smtp_host = mail.acme.io\n' > "$etc/mail.conf"
+  cp "$etc/mail.conf" "$etc/mail.conf.bak" # old backup, outside the window
+  printf 'Db_Pass: "%s"\n' "$LEAKED_PW" > "$etc/vault.yaml"
+  printf 'DB_PASSWORD=%s\n' "$LEAKED_PW" > "$etc/secrets.d/db.ENV"
+  chmod 644 "$etc"/*.conf "$etc/shop.conf~" "$etc/mail.conf.bak"
+  chmod 600 "$etc/vault.yaml" "$etc/secrets.d/db.ENV"
+  chmod 700 "$etc/secrets.d"
+
+  # ── app tree, owned by juanes ───────────────────────────────────────
+  mkdir -p "$app"/app/{config,scripts,old.bak} "$app"/.git/logs \
+           "$app"/vendor/pgclient/{tests,examples}
+  cat > "$app/app/config/settings.py" <<EOF
+# Shop settings
+# DB_PASSWORD = "$LEAKED_PW"   (kept for reference, remove before release)
+DB_HOST = "db.acme.io"
+DB_PASSWORD = "$LEAKED_PW"
+db_password_rotated_at = "2025-11-02"
+EOF
+  printf 'DB_PASSWORD=%s\n' "$LEAKED_PW" > "$app/app/config/.env"
+  cp "$app/app/config/.env" "$app/app/config/.env.bak"
+  printf "#!/bin/sh\nPGPASSWORD='%s' pg_dump -h db.acme.io shop > /backups/shop.sql\n" \
+    "$LEAKED_PW" > "$app/app/scripts/backup.sh"
+  printf 'pre-refactor notes\n' > "$app/app/old.bak/notes.txt"
+  printf 'REGION=us-east-1\n' > "$app/deploy.ENV"
+  # Noise the search must skip: git internals and third-party code.
+  printf '0000000 a1b2c3d Ana <ana@acme.io> 1759000000 -0500\tcommit: rotate creds to %s\n' \
+    "$LEAKED_PW" > "$app/.git/logs/HEAD"
+  printf "INSERT INTO users VALUES ('app', '%s');\n" "$LEAKED_PW" \
+    > "$app/vendor/pgclient/tests/fixture.sql"
+  printf 'DB_PASSWORD=changeme\n' > "$app/vendor/pgclient/examples/.env"
+  chown -R juanes:juanes "$app"
+  chmod 640 "$app/app/config/.env"     # group-readable only: not an incident
+  chmod 644 "$app/app/config/.env.bak" # world-readable copy: an incident
+  chmod 755 "$app/app/scripts/backup.sh"
+
+  # ── database client log with refused logins ─────────────────────────
+  mkdir -p /var/log/shop
+  cat > /var/log/shop/db-client.log <<'EOF'
+2026-10-06T09:58:01Z INFO  pool=main host=web-1 query ok rows=12
+2026-10-06T09:58:04Z INFO  pool=main host=web-2 query ok rows=3
+2026-10-06T09:58:07Z INFO  pool=main host=web-1 query ok rows=40
+2026-10-06T09:58:09Z INFO  pool=main host=web-2 reconnecting after config reload
+2026-10-06T09:58:10Z ERROR pool=main host=web-2 auth failed: password authentication failed for user "app"
+2026-10-06T09:58:11Z WARN  pool=main host=web-2 retry 1/3 in 5s
+2026-10-06T09:58:14Z INFO  pool=main host=web-1 query ok rows=7
+2026-10-06T09:58:20Z INFO  pool=main host=web-1 query ok rows=1
+2026-10-06T09:58:23Z INFO  pool=main host=web-1 query ok rows=19
+2026-10-06T09:58:26Z INFO  pool=main host=web-1 query ok rows=2
+2026-10-06T09:58:30Z INFO  pool=batch host=cron-1 nightly export starting
+2026-10-06T09:58:31Z INFO  pool=batch host=cron-1 opening connection to db.acme.io
+2026-10-06T09:58:32Z ERROR pool=batch host=cron-1 auth failed: password authentication failed for user "app"
+2026-10-06T09:58:33Z WARN  pool=batch host=cron-1 export aborted
+2026-10-06T09:58:35Z INFO  pool=main host=web-1 query ok rows=5
+2026-10-06T09:58:40Z INFO  pool=main host=web-1 query ok rows=11
+2026-10-06T09:58:43Z INFO  pool=main host=web-1 query ok rows=4
+2026-10-06T09:58:46Z INFO  pool=main host=web-1 query ok rows=9
+2026-10-06T09:58:49Z INFO  pool=main host=web-1 query ok rows=6
+2026-10-06T09:58:52Z INFO  pool=main host=web-2 retry 3/3
+2026-10-06T09:58:53Z ERROR pool=main host=web-2 auth failed: password authentication failed for user "app"
+2026-10-06T09:58:54Z ERROR pool=main host=web-2 giving up, marking pool unhealthy
+2026-10-06T09:58:55Z INFO  pool=main host=web-1 query ok rows=8
+2026-10-06T09:59:00Z INFO  pool=main host=web-1 query ok rows=13
+2026-10-06T09:59:03Z INFO  pool=main host=web-1 query ok rows=2
+2026-10-06T09:59:06Z INFO  pool=main host=web-1 query ok rows=17
+2026-10-06T09:59:09Z INFO  pool=main host=web-1 config reload requested by deploy
+2026-10-06T09:59:10Z ERROR pool=main host=web-1 auth failed: password authentication failed for user "app"
+2026-10-06T09:59:11Z WARN  pool=main host=web-1 falling back to cached connection
+2026-10-06T09:59:14Z INFO  pool=main host=web-1 query ok rows=3
+2026-10-06T09:59:17Z INFO  pool=main host=web-1 query ok rows=10
+2026-10-06T09:59:20Z INFO  pool=main host=web-1 query ok rows=1
+2026-10-06T09:59:23Z INFO  pool=main host=web-1 query ok rows=6
+2026-10-06T09:59:26Z INFO  pool=batch host=cron-1 retrying nightly export
+2026-10-06T09:59:27Z ERROR pool=batch host=cron-1 auth failed: password authentication failed for user "app"
+2026-10-06T09:59:28Z WARN  pool=batch host=cron-1 export aborted, paging on-call
+2026-10-06T09:59:31Z INFO  pool=main host=web-1 query ok rows=14
+2026-10-06T09:59:34Z INFO  pool=main host=web-1 query ok rows=5
+2026-10-06T09:59:37Z INFO  pool=main host=web-2 manual restart by on-call
+2026-10-06T09:59:38Z ERROR pool=main host=web-2 auth failed: password authentication failed for user "app"
+2026-10-06T09:59:39Z WARN  pool=main host=web-2 pool still unhealthy
+2026-10-06T09:59:42Z INFO  pool=main host=web-1 query ok rows=7
+EOF
+}
+
+# Runs at first interactive shell. "Changed in the last 3 days" must be true
+# relative to the day Juanes opens the lab, and a cached image layer can be
+# weeks old, so the ages are set at runtime, never at build time.
+runtime_leaked_secret() {
+  find /srv/shop /etc/shop -exec touch -h -d '30 days ago' {} +
+  touch -d '10 days ago' /etc/shop/mail.conf.bak
+  touch -d '1 day ago'   /etc/shop/shop.conf~ /srv/shop/app/old.bak
+  touch -d '2 days ago'  /srv/shop/app/config/.env.bak
+}
+
+install_leaked_secret_launcher() {
+  cat >> /etc/bash.bashrc <<'EOF'
+
+# devops_gym: age the leaked-secret fixtures relative to today, once per container.
+if [ ! -e /tmp/.gym-leak ]; then
+  touch /tmp/.gym-leak
+  sudo /setup.sh runtime-leaked-secret
+fi
+EOF
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -428,6 +565,10 @@ EOF
 }
 
 main() {
+  if [[ ${1:-} == "runtime-leaked-secret" ]]; then
+    runtime_leaked_secret
+    exit 0
+  fi
   if [[ ${1:-} == "runtime-disk-bloat" ]]; then
     # Invoked from /etc/bash.bashrc at first interactive shell (as root, after
     # --privileged grants the mount capability). This is a RUNTIME step so the
@@ -453,8 +594,10 @@ main() {
   processes_log_flood
   processes_immortal_daemon
   git_release_day
+  search_leaked_secret
   install_live_launcher
   install_disk_bloat_launcher
+  install_leaked_secret_launcher
 }
 
 main "$@"
