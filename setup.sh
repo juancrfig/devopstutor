@@ -264,6 +264,129 @@ EOF
   chmod 666 /var/log/watchdog.log
 }
 
+# ══ 07-git / 01-release-day ════════════════════════════════════════
+
+# Every repository command runs as juanes, so the bare "server" repo and the
+# working clone stay owned by him (root-owned objects would break his pushes,
+# and git refuses repos owned by another user).
+as_juanes() { runuser -u juanes -- env HOME=/home/juanes "$@"; }
+
+# run_in DIR <<'EOS' ... EOS — run a script read from stdin as juanes inside
+# DIR, with commit_as available and errors fatal.
+run_in() {
+  local dir=$1
+  as_juanes bash -c "set -euo pipefail; $(declare -f commit_as); cd '$dir'; $(cat)"
+}
+
+# commit_as "Name" "days ago" "message" — run inside a repo; backdates both
+# author and committer so log, blame and reflog tell a believable story.
+commit_as() {
+  local name=$1 when=$2 msg=$3 email
+  email="$(tr '[:upper:] ' '[:lower:].' <<<"$name")@acme.io"
+  GIT_AUTHOR_NAME=$name GIT_AUTHOR_EMAIL=$email \
+  GIT_COMMITTER_NAME=$name GIT_COMMITTER_EMAIL=$email \
+  GIT_AUTHOR_DATE="$(date -R -d "$when")" GIT_COMMITTER_DATE="$(date -R -d "$when")" \
+    git commit -q -m "$msg"
+}
+
+git_release_day() {
+  # Company-wide config. push.default=upstream makes a plain push follow the
+  # branch's tracking ref, whatever its name: the trap behind this incident.
+  cat > /etc/gitconfig <<'EOF'
+# ACME engineering standard git config (managed by platform team)
+[init]
+	defaultBranch = master
+[core]
+	editor = vim
+[push]
+	default = upstream
+EOF
+  cat > /home/juanes/.gitconfig <<'EOF'
+[user]
+	name = Juanes Figueroa
+	email = juanes.figueroa@acme.io
+EOF
+  chown juanes:juanes /home/juanes/.gitconfig
+
+  mkdir -p /srv/git
+  chown juanes:juanes /srv/git
+  as_juanes git init -q --bare /srv/git/infra.git
+
+  # ── shared history, written from a throwaway teammate clone ─────────
+  local team=/tmp/team-infra
+  as_juanes git clone -q /srv/git/infra.git "$team" 2>/dev/null
+  run_in "$team" <<'EOS'
+    cat > deploy.yaml <<'EOF'
+service: checkout
+image: registry.acme.io/checkout:v1.4.0
+replicas: 2
+strategy:
+  maxSurge: 1
+  maxUnavailable: 0
+healthcheck:
+  path: /health
+  interval: 10s
+  timeout: 5s
+resources:
+  memory: 256Mi
+EOF
+    printf '# infra\n\nDeploy config for the checkout service.\n' > README.md
+    git add . && commit_as "Dana Reyes" "12 days ago" "Initial checkout deploy config"
+
+    sed -i 's/maxSurge: 1/maxSurge: 0/' deploy.yaml
+    git add deploy.yaml
+    commit_as "Sam Ortiz" "9 days ago" "Cap surge pods at zero to cut node costs during deploys"
+
+    printf 'DB_HOST=db.internal\nDB_PASSWORD=Spr1ng-Checkout-2026!\n' > .env
+    git add .env
+    commit_as "Ben Okafor" "7 days ago" "Add env file so docker compose works locally"
+    git push -q origin master
+
+    # Rosa's approved scale-up, branched before anything below happened.
+    git switch -q -c feature/replicas
+    sed -i 's/replicas: 2/replicas: 4/' deploy.yaml
+    git add deploy.yaml
+    commit_as "Rosa Diaz" "6 days ago" "Scale checkout to 4 replicas for the sales peak"
+    git push -q -u origin feature/replicas 2>/dev/null
+    git switch -q master
+EOS
+
+  # ── juanes's own clone and his mistakes ─────────────────────────────
+  local repo=/home/juanes/infra
+  as_juanes env GIT_COMMITTER_DATE="$(date -R -d '6 days ago')" \
+    git clone -q /srv/git/infra.git "$repo"
+  run_in "$repo" <<'EOS'
+    # Monday: rotation script committed straight on master, then panic-erased.
+    mkdir -p scripts
+    printf '#!/bin/sh\n# Renew TLS certs and reload the ingress.\ncertbot renew --quiet && nginx -s reload\n' > scripts/rotate-certs.sh
+    chmod +x scripts/rotate-certs.sh
+    git add scripts
+    commit_as "Juanes Figueroa" "5 days ago" "Add TLS cert rotation script"
+    GIT_COMMITTER_DATE="$(date -R -d '5 days ago')" git reset -q --hard HEAD~1
+
+    # The incident: branch cut from the remote master, so it tracks it.
+    GIT_COMMITTER_DATE="$(date -R -d '3 days ago')" \
+      git checkout -q -b feature/healthcheck-timeout origin/master
+    sed -i 's/timeout: 5s/timeout: 30s/' deploy.yaml
+    git add deploy.yaml
+    commit_as "Juanes Figueroa" "3 days ago" "Raise healthcheck timeout to 30s"
+    git push -q 2>/dev/null
+EOS
+
+  # A teammate builds on the polluted master after the misfire.
+  run_in "$team" <<'EOS'
+    git pull -q
+    sed -i 's/checkout:v1.4.0/checkout:v1.5.0/' deploy.yaml
+    git add deploy.yaml
+    commit_as "Li Wei" "2 days ago" "Bump checkout image to v1.5.0"
+    git push -q origin master
+EOS
+  rm -rf "$team"
+
+  # Today's half-done work, never committed.
+  as_juanes sed -i 's/memory: 256Mi/memory: 512Mi/' "$repo/deploy.yaml"
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -329,6 +452,7 @@ main() {
   users_perm_meltdown
   processes_log_flood
   processes_immortal_daemon
+  git_release_day
   install_live_launcher
   install_disk_bloat_launcher
 }

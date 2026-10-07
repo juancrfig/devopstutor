@@ -79,6 +79,7 @@ When Juanes asks for help, hints, or questions while working through a ticket:
 | 03-text | cat head tail grep sort uniq cut tr xargs wc echo mkdir | 01-log-triage, 02-csv-rescue |
 | 04-users-perms | groups adduser deluser chmod chown chgrp su usermod id find ls stat rm cat touch | 01-offboard-onboard, 02-perm-meltdown |
 | 05-processes | ps pgrep kill fg bg jobs sleep pstree | 01-log-flood, 02-immortal-daemon |
+| 07-git | git (status log branch switch config fetch pull push stash revert merge diff add commit rm reflog tag blame show) vim cat echo | 01-release-day |
 | 06-services | systemctl journalctl — **parked**: plain container has no systemd PID 1. Unpark plan: systemd-as-PID-1 image run with `--cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup` (or podman). Until then, systemd theory rides in 05-processes questions. | — |
 
 ## Planned topics (near future)
