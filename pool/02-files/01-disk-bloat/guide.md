@@ -25,4 +25,12 @@ df du ls find file stat sort head truncate wc xargs -print0 rm
 2. Interview: you deleted a 30G log file but the disk usage didn't drop. Why, and how do you actually reclaim the space without restarting the service?
 3. Interview: what does an inode store, and what two pieces of information does a directory entry actually map together? Why can a filesystem run out of space with `df` showing space free?
 
-## ANSWERS
+# ANSWERS
+
+A file has two sizes: 
+- Apparent size
+- Allocated size
+
+You can compare these two sizes using commands like "stat" or "du"
+
+The "rm" command deletes a name, not the blocks of memory it references it.  
