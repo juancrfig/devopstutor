@@ -26,3 +26,5 @@ cat file wc tr cut sort grep xargs mkdir echo head tail
 1. Interview: what actually is a "line" to Unix tools? What are `\n` and `\r` at the byte level, and why does a stray `\r` make `grep pattern$` mysteriously fail?
 2. Interview: everything in Unix is "text streams" — why is that composability the core design idea of the shell? Contrast piping with writing intermediate files: when is each the right call?
 3. Interview: `xargs` exists because pipes connect streams, not arguments. Explain that distinction — what breaks if you pipe a file list straight into a command that ignores stdin?
+
+## ANSWERS

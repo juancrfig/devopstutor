@@ -28,3 +28,5 @@ find chown chgrp adduser deluser groups usermod su id ls rm cat
 2. Interview: difference between a user's primary group and supplementary groups? When a user creates a file, which group does it get?
 3. Interview: `su - marina` vs `su marina` — what does the `-` change, and when has skipping it burned people in production?
 4. Interview: why do shared-project directories often use the setgid bit? What problem from this very ticket does it prevent?
+
+## ANSWERS

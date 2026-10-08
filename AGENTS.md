@@ -48,6 +48,8 @@ devops_gym/
 cmd1 cmd2 cmd3
 ## QUESTIONS
 1. <interview-style concept question>
+## ANSWERS
+<Juanes's own recall hints — agents never write here>
 ```
 
 ## Design rules
@@ -57,6 +59,10 @@ cmd1 cmd2 cmd3
   solutions; force pipes, globbing, and redirection (`>`, `>>`, `2>`, `2>&1`).
 - QUESTIONS: ~3–5 genuine mid-level DevOps interview
   questions probing fundamentals. No trivia.
+- ANSWERS: written by Juanes only, as short 80/20 recall hints. New tickets
+  get an empty `## ANSWERS` heading as the last section. Agents never write,
+  edit, or fill it in. In `gym`, opening a non-empty ANSWERS page caps the
+  grade at struggle.
 - `setup.sh` should itself be good shell-scripting practice to read post-solve.
 - Every step must be doable in the container, and every claim the ticket
   states as fact must be true there. `## COMMANDS` must cover each step.

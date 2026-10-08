@@ -28,3 +28,5 @@ ls stat chmod chown chgrp su id find groups cat touch
 2. Interview: a file is mode 777 but its parent directory is 700 and owned by root — can a normal user read the file? Walk me through how the kernel evaluates the path.
 3. Interview: why is a recursive 777 a security incident and not just sloppiness? Name two concrete attacks it enables on this exact app layout.
 4. Interview: what is umask, and why did the junior's "fix" work at all — what was probably the original problem?
+
+## ANSWERS

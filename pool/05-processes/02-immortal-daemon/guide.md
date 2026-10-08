@@ -26,3 +26,5 @@ ps pgrep pstree kill tail grep
 2. Interview: why is `kill -9` as a first resort considered malpractice? Name two kinds of damage it can cause that SIGTERM wouldn't.
 3. Interview: this respawn behavior is exactly what a supervisor like systemd provides on purpose. Explain what systemd is, what a unit is, and how `systemctl` + `journalctl` would have made this whole ticket a two-command job.
 4. Interview: how would you stop a service supervised by systemd correctly, and why does killing the process directly not work there either?
+
+## ANSWERS

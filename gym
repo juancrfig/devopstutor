@@ -19,7 +19,9 @@ usage(){
 Usage: ./gym [topic/scenario]
 
 Without an argument, pick a ticket due today. In the guide:
-  t  ticket    c  command hints    q  questions    x  finish and grade
+  t  ticket    c  command hints    q  questions    a  your answers    x  finish and grade
+
+Opening non-empty answers caps the grade at struggle.
 
 Run ./run.sh in another terminal to enter the disposable lab.
 EOF
@@ -98,6 +100,8 @@ load_guide(){
   TICKET=$(section TICKET)
   COMMANDS=$(section COMMANDS | tr -s ' \n' ' ' | sed 's/^ *//;s/ *$//')
   QUESTIONS=$(section QUESTIONS)
+  ANSWERS=$(section ANSWERS)
+  PEEKED=0
 }
 section(){ awk -v s="## $1" '$0==s{f=1;next} /^## /{f=0} f' "$GUIDE"; }
 
@@ -105,21 +109,42 @@ section(){ awk -v s="## $1" '$0==s{f=1;next} /^## /{f=0} f' "$GUIDE"; }
 nav(){
   local a=$1; hl(){ [ "$1" = "$a" ] && printf '%s%s%s' "$c$b" "$2" "$r" || printf '%s%s%s' "$d" "$2" "$r"; }
   printf '\n%s ─ %s' "$d" "$r"
-  hl t '[t]icket'; printf '   '; hl c '[c]ommands'; printf '   '; hl q '[q]uestions'
+  hl t '[t]icket'; printf '   '; hl c '[c]ommands'; printf '   '; hl q '[q]uestions'; printf '   '; hl a '[a]nswers'
   printf '   %s[x]done%s\n' "$d" "$r"
 }
 page_ticket(){ printf '%s%sTICKET: %s%s\n\n%s\n' "$clr" "$b" "$TITLE" "$r" "$TICKET"; nav t; }
 page_commands(){ printf '%s%sCOMMANDS IN PLAY%s\n\n  %s%s%s\n' "$clr" "$b" "$r" "$g" "$COMMANDS" "$r"; nav c; }
 page_questions(){ printf '%s%sQUESTIONS%s\n\n%s\n' "$clr" "$b" "$r" "$QUESTIONS"; nav q; }
+page_answers(){
+  if [[ -z "${ANSWERS//[[:space:]]/}" ]]; then
+    printf '%s%sYOUR ANSWERS%s\n\n%sNone yet. Write your hints under ## ANSWERS in this guide.md.%s\n' "$clr" "$b" "$r" "$d" "$r"
+  else
+    printf '%s%sYOUR ANSWERS%s  %s(grade capped at struggle)%s\n\n%s\n' "$clr" "$b" "$r" "$y" "$r" "$ANSWERS"
+  fi
+  nav a
+}
+# Peeking at the answers means the theory was not recalled: confirm first,
+# because the peek is recorded and blocks a pass grade.
+confirm_answers(){
+  [[ -z "${ANSWERS//[[:space:]]/}" || $PEEKED == 1 ]] && return 0
+  printf '%s%sOpen your answers?%s This caps the grade at struggle. [y/N] ' "$clr" "$b" "$r"
+  local k; read -rsn1 k
+  [[ "$k" == y ]] && PEEKED=1
+}
 
 grade_prompt(){
   printf '%s%sGrade this ticket%s  %s(weakest of practical + theory)%s\n\n' "$clr" "$b" "$r" "$d" "$r"
-  printf '  %s[p]ass%s     nailed box + could answer the questions\n' "$g" "$r"
+  if ((PEEKED)); then
+    printf '  %s[p]ass      not available: you opened your answers%s\n' "$d" "$r"
+  else
+    printf '  %s[p]ass%s     nailed box + could answer the questions\n' "$g" "$r"
+  fi
   printf '  %s[s]truggle%s solved it, but slow or shaky on theory\n' "$y" "$r"
   printf '  %s[f]ail%s     lost on the box or the questions\n\n' "$c" "$r"
   local k; read -rsn1 k
   case "$k" in
-    p) reschedule "$KEY" pass;;
+    p) if ((PEEKED)); then printf '%sanswers were opened: recorded as struggle%s\n' "$y" "$r"; reschedule "$KEY" struggle
+       else reschedule "$KEY" pass; fi;;
     s) reschedule "$KEY" struggle;;
     f) reschedule "$KEY" fail;;
     *) printf '%sno grade recorded%s\n' "$d" "$r";;
@@ -130,9 +155,9 @@ run_guide(){
   load_guide
   local view=t k
   while :; do
-    case "$view" in t) page_ticket;; c) page_commands;; q) page_questions;; esac
+    case "$view" in t) page_ticket;; c) page_commands;; q) page_questions;; a) page_answers;; esac
     read -rsn1 k
-    case "$k" in t|c|q) view=$k;; x) grade_prompt; break;; esac
+    case "$k" in t|c|q) view=$k;; a) confirm_answers && [[ -z "${ANSWERS//[[:space:]]/}" || $PEEKED == 1 ]] && view=a;; x) grade_prompt; break;; esac
   done
 }
 

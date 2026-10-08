@@ -24,3 +24,5 @@ find stat ls file touch wc
 1. Interview: what's the difference between a file's mtime and ctime, and why does a forensics team care about files where mtime is older than ctime?
 2. Interview: why do `ls` and shell globs miss dotfiles by default, and why does that make hidden-file conventions a favorite hiding spot? How do you enumerate a tree so nothing can hide?
 3. Interview: a script named `logo.jpg` — what actually decides whether Linux will execute a file: its extension, its content, or something else?
+
+## ANSWERS

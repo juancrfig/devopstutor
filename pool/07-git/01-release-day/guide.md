@@ -48,3 +48,5 @@ git reflog git tag git blame git show vim cat echo
 3. Interview: fetch vs pull, and merge vs rebase. What is a fast-forward? When would you rebase, and when must you never rebase?
 4. Interview: what is the reflog? Is it shared with the remote? How long does it keep entries? What work can `reset --hard` destroy that the reflog cannot bring back?
 5. Interview: a password was committed and pushed. Why is untracking the file not enough? List everything you would do, in order.
+
+## ANSWERS

@@ -27,3 +27,5 @@ ps pgrep pstree kill fg bg jobs sleep wc tail grep
 1. Interview: what is a zombie process really — what resource does it still hold, who is responsible for cleaning it up, and when do thousands of zombies indicate an application bug?
 2. Interview: explain the relationship between a process, its parent, and PID 1. What happens to children when their parent dies?
 3. Interview: what does `&` at the end of a command actually do, and how is a background job different from a daemon?
+
+## ANSWERS
