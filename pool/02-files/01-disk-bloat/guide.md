@@ -28,7 +28,7 @@ df du ls find file stat sort head truncate wc xargs -print0 rm lsof ps
 
 ## QUESTIONS
 1. Interview: `ls -l` on `/var/appdata` lists `prealloc.img` at 2G, yet `df -h /var/appdata` shows the filesystem only ~93% full (~82M used) and `du -sh /var/appdata` agrees. Explain how a 2G "file" can occupy almost nothing, and which commands (`df`, `du`, `ls`, `stat`) you'd use to confirm it.
-2. Interview: every night log rotation renames `app.log` to `app.log.1` and creates a fresh `app.log`, yet the service keeps writing into `app.log.1` while the new file stays empty. Why? Name the two standard ways to rotate a live service's log safely and the trade-off of each.
+2. Interview: every night log rotation renames `app.log` to `app.log.1` and creates a fresh `app.log`, yet the service keeps writing into `app.log.1` while the new file stays empty. Why?
 3. Interview: what does an inode store, and what two pieces of information does a directory entry actually map together? Why can a filesystem run out of space with `df` showing space free?
 
 ## ANSWERS
