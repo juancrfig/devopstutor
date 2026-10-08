@@ -84,7 +84,7 @@ When Juanes asks for help, hints, or questions while working through a ticket:
 | Topic | Commands | Tickets |
 |---|---|---|
 | 01-orientation | whoami who w hostname uname uptime date free lscpu history command -v cat echo | 01-amnesia-shift |
-| 02-files | ls find file stat wc du df touch rm sort head | 01-disk-bloat, 02-mystery-artifacts |
+| 02-files | ls find file stat wc du df touch rm sort head truncate xargs lsof ps | 01-disk-bloat, 02-mystery-artifacts |
 | 03-text | cat head tail grep sort uniq cut tr xargs wc echo mkdir | 01-log-triage, 02-csv-rescue |
 | 04-users-perms | groups adduser deluser chmod chown chgrp su usermod id find ls stat rm cat touch | 01-offboard-onboard, 02-perm-meltdown |
 | 05-processes | ps pgrep kill fg bg jobs sleep pstree | 01-log-flood, 02-immortal-daemon |

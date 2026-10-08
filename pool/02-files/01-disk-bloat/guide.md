@@ -16,13 +16,19 @@ Produce evidence, then clean up:
 4. `releases/v1/backup.log` refuses to open as text. Determine what it
    really is before deciding its fate.
 5. There's a file whose name contains spaces. Remove it without renaming it.
+6. A second alert: `/var/log/appsvc` is nearly full too. A teammate already
+   deleted the service's huge log to fix it, but the alert never cleared and
+   nobody can find what is using the space. Free the space without stopping
+   or restarting the service. Append before/after usage numbers to the report
+   and show the service is still running afterwards. Self-check: about 35M
+   comes back.
 
 ## COMMANDS
-df du ls find file stat sort head truncate wc xargs -print0 rm
+df du ls find file stat sort head truncate wc xargs -print0 rm lsof ps
 
 ## QUESTIONS
-1. Interview: `ls -l` on `/var/appdata` lists `prealloc.img` at 2G, yet `df -h /var/appdata` shows the filesystem only ~93% full (~82M used) and `du -sh /var/appdata` agrees. Explain how a 2G "file" can occupy almost nothing, and name a second, unrelated way a filesystem can stay full after its largest file is deleted (e.g. a deleted-but-still-open file) — for each, say which command (`df`, `du`, `ls`, `lsof`) you'd use to confirm it.
-2. Interview: you deleted a 30G log file but the disk usage didn't drop. Why, and how do you actually reclaim the space without restarting the service?
+1. Interview: `ls -l` on `/var/appdata` lists `prealloc.img` at 2G, yet `df -h /var/appdata` shows the filesystem only ~93% full (~82M used) and `du -sh /var/appdata` agrees. Explain how a 2G "file" can occupy almost nothing, and which commands (`df`, `du`, `ls`, `stat`) you'd use to confirm it.
+2. Interview: every night log rotation renames `app.log` to `app.log.1` and creates a fresh `app.log`, yet the service keeps writing into `app.log.1` while the new file stays empty. Why? Name the two standard ways to rotate a live service's log safely and the trade-off of each.
 3. Interview: what does an inode store, and what two pieces of information does a directory entry actually map together? Why can a filesystem run out of space with `df` showing space free?
 
 # ANSWERS

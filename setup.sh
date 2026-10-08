@@ -65,6 +65,42 @@ files_disk_bloat() {
   # Created as root at runtime; hand the tree to the on-call admin so the
   # cleanup steps work without sudo.
   chown -R juanes:juanes "$root"
+
+  files_disk_bloat_deleted_log
+}
+
+# Item 6: a service holds its log open after a teammate deleted it, so df
+# says full while du finds nothing. Lives on its OWN small tmpfs so the
+# /var/appdata numbers in items 1-2 stay true. Runs at runtime (needs mount).
+files_disk_bloat_deleted_log() {
+  local logdir=/var/log/appsvc
+  mkdir -p "$logdir"
+  mountpoint -q "$logdir" || mount -t tmpfs -o size=40M tmpfs "$logdir"
+  chown juanes:juanes "$logdir"
+
+  # The service: opens its log ONCE on fd 3, dumps a backlog, then keeps
+  # writing a heartbeat through the same descriptor, never by name.
+  cat > /usr/local/bin/appsvc <<'EOF'
+#!/bin/bash
+exec 3>>/var/log/appsvc/app.log
+yes "$(date -Is) INFO appsvc request served in 12ms" | head -c 35M >&3
+while true; do
+  echo "$(date -Is) INFO appsvc heartbeat" >&3
+  sleep 5 3>&-   # do not leak the log fd into the child
+done
+EOF
+  chmod 755 /usr/local/bin/appsvc
+
+  # Owned by juanes so he can reach its descriptors without sudo.
+  runuser -u juanes -- setsid -f /usr/local/bin/appsvc </dev/null >/dev/null 2>&1
+
+  # Wait for the backlog, then play the teammate who "fixed" it with rm.
+  local i
+  for i in $(seq 1 50); do
+    [ "$(stat -c %s "$logdir/app.log" 2>/dev/null || echo 0)" -ge 36700160 ] && break
+    sleep 0.2
+  done
+  rm -f "$logdir/app.log"
 }
 
 # ══ 02-files / 02-mystery-artifacts ════════════════════════════════
