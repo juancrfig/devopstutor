@@ -31,7 +31,7 @@ df du ls find file stat sort head truncate wc xargs -print0 rm lsof ps
 2. Interview: every night log rotation renames `app.log` to `app.log.1` and creates a fresh `app.log`, yet the service keeps writing into `app.log.1` while the new file stays empty. Why? Name the two standard ways to rotate a live service's log safely and the trade-off of each.
 3. Interview: what does an inode store, and what two pieces of information does a directory entry actually map together? Why can a filesystem run out of space with `df` showing space free?
 
-# ANSWERS
+## ANSWERS
 
 A file has two sizes: 
 - Apparent size
