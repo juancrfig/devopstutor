@@ -560,6 +560,54 @@ fi
 EOF
 }
 
+# ══ 02-files / 03-release-links ════════════════════════════════════
+
+files_release_links() {
+  local root=/srv/app
+  mkdir -p "$root"/releases/v{1,2,3} /etc/nginx/sites-{available,enabled}
+
+  # A stale active release and one stale nginx-style site link make two
+  # broken links in the searched trees; the other links resolve normally.
+  printf 'release v1\n' > "$root/releases/v1/index.html"
+  printf 'release v2\n' > "$root/releases/v2/index.html"
+  printf 'release v3\n' > "$root/releases/v3/index.html"
+  ln -s releases/v9 "$root/current"
+  ln -s releases/v1 "$root/previous"
+  printf 'server { listen 8080; }\n' > /etc/nginx/sites-available/shop.conf
+  ln -s ../sites-available/shop.conf /etc/nginx/sites-enabled/shop.conf
+  ln -s ../sites-available/retired.conf /etc/nginx/sites-enabled/retired.conf
+  chown -R juanes:juanes "$root" /etc/nginx
+
+  # A dedicated runtime tmpfs makes df meaningful and keeps the hard-link
+  # pair on one filesystem. Removing one name leaves the same blocks allocated.
+  cat > /etc/systemd/system/gym-release-links.service <<'EOF'
+[Unit]
+Description=Create release-links filesystem fixture
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/setup.sh runtime-release-links
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-release-links.service >/dev/null
+}
+
+runtime_release_links() {
+  local mount=/srv/app/logfs
+  mkdir -p "$mount"
+  mountpoint -q "$mount" || mount -t tmpfs -o size=48M tmpfs "$mount"
+  mkdir -p "$mount/logs" "$mount/archive"
+  dd if=/dev/zero of="$mount/logs/api.log" bs=1M count=24 status=none
+  ln "$mount/logs/api.log" "$mount/archive/api.log"
+  chown -R juanes:juanes "$mount"
+  # Both names are present so the learner can observe unlinking one name:
+  # blocks remain allocated until the final directory entry is removed.
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -601,6 +649,10 @@ EOF
 }
 
 main() {
+  if [[ ${1:-} == "runtime-release-links" ]]; then
+    runtime_release_links
+    exit 0
+  fi
   if [[ ${1:-} == "runtime-leaked-secret" ]]; then
     runtime_leaked_secret
     exit 0
@@ -634,6 +686,7 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
+  files_release_links
 }
 
 main "$@"
