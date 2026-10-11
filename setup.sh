@@ -733,7 +733,8 @@ RestartSec=30s
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl enable report-builder.service thumbnailer.service
+  # run.sh starts these explicitly only when gym's active ticket matches.
+  # Leaving them disabled prevents CPU and OOM work in every other session.
 }
 
 # ══ 10-scripting / 01-silent-backup ════════════════════════════════

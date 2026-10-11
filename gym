@@ -162,6 +162,8 @@ grade_prompt(){
 
 run_guide(){
   load_guide
+  # run.sh reads this last-served ticket to decide whether slow-box jobs start.
+  printf '%s\n' "${KEY#pool/}" > "$ROOT/.gym-active"
   local view=t k
   while :; do
     case "$view" in t) page_ticket;; c) page_commands;; q) page_questions;; a) page_answers;; esac

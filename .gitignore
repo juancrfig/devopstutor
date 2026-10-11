@@ -1,1 +1,4 @@
 # Progress files are intentionally tracked so gym state can be shared by cloning.
+
+# The last ticket served by gym controls ticket-specific lab services.
+/.gym-active

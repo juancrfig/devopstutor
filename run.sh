@@ -6,6 +6,10 @@ cd "$(dirname "$0")"
 # The container runs detached; your shell joins it with `docker exec`, and the
 # container is removed when that shell exits, so every session starts fresh.
 name="devops-lab-$$"
+active_ticket=
+if [[ -f .gym-active ]]; then
+  IFS= read -r active_ticket < .gym-active || true
+fi
 
 docker build -t gym/devops-lab .
 
@@ -30,6 +34,12 @@ case "$state" in
   running|degraded) ;;
   *) echo "lab did not boot (systemd state: ${state:-unknown})" >&2; exit 1 ;;
 esac
+
+# Start the expensive fixtures only for their ticket; systemd units stay disabled
+# in the image so every unrelated session remains quiet from its first boot.
+if [[ "$active_ticket" == "09-resources/01-slow-box" ]]; then
+  docker exec "$name" systemctl start report-builder.service thumbnailer.service
+fi
 
 docker exec -it -u juanes -w /home/juanes -e HOME=/home/juanes \
   -e TERM="${TERM:-xterm}" "$name" bash
