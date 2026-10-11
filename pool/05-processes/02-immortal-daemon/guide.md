@@ -24,7 +24,7 @@ ps pgrep pstree kill tail grep
 ## QUESTIONS
 1. Interview: SIGTERM vs SIGKILL vs SIGHUP — what does each mean by convention, which can a process catch, and why do orchestrators (Docker, Kubernetes, systemd) always send one, wait, then send another?
 2. Interview: why is `kill -9` as a first resort considered malpractice? Name two kinds of damage it can cause that SIGTERM wouldn't.
-3. Interview: this respawn behavior is exactly what a supervisor like systemd provides on purpose. Explain what systemd is, what a unit is, and how `systemctl` + `journalctl` would have made this whole ticket a two-command job.
-4. Interview: how would you stop a service supervised by systemd correctly, and why does killing the process directly not work there either?
+3. Interview: what does `fork` create, and how does a process replace its program image with `exec` while keeping the same PID?
+4. Interview: when a process receives a signal while blocked in a system call, when can the handler run, and what does the interrupted call's return value tell you?
 
 ## ANSWERS
