@@ -560,6 +560,27 @@ fi
 EOF
 }
 
+# ══ 11-packages / 01-tampered-binary ═══════════════════════════════
+
+packages_tampered_binary() {
+  # Replace one package-owned executable with a harmless but suspicious
+  # response; reinstating this package is the intended repair.
+  cat > /usr/bin/less <<'EOF'
+#!/bin/sh
+echo 'SECURITY ALERT: pager integrity check failed'
+EOF
+  chmod 755 /usr/bin/less
+
+  # A stale copy makes the absent utility look present to an inattentive
+  # operator, but this directory is intentionally not on juanes's PATH.
+  mkdir -p /opt/tools/bin
+  cat > /opt/tools/bin/tree <<'EOF'
+#!/bin/sh
+echo 'tree 1.7.0 (old local copy)'
+EOF
+  chmod 755 /opt/tools/bin/tree
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -634,6 +655,7 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
+  packages_tampered_binary
 }
 
 main "$@"
