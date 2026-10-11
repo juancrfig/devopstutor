@@ -104,7 +104,7 @@ When Juanes asks for help, hints, or questions while working through a ticket:
 | 05-processes | ps pgrep kill fg bg jobs sleep pstree | 01-log-flood, 02-immortal-daemon |
 | 07-git | git (status log branch switch config fetch pull push stash revert merge diff add commit rm reflog tag blame show) vim cat echo | 01-release-day |
 | 08-search | grep (-r -F -i -w -E -n -c -l -L -v -o -C --exclude-dir) find (-name -iname -type -mtime -maxdepth -perm -path -not -o -exec {} +) sudo sort uniq wc cat echo | 01-leaked-secret |
-| 06-services | systemctl journalctl | — |
+| 06-services | systemctl journalctl chmod ls cat kill ps | 01-crash-loop |
 
 ## Planned topics (near future)
 
