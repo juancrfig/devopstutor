@@ -560,6 +560,136 @@ fi
 EOF
 }
 
+# ══ 12-storage / 01-phantom-full ═══════════════════════════════════
+
+storage_phantom_full() {
+  # The lab is privileged: this image file and verified loop association are
+  # the ONLY block device this ticket may format. Never scan for a device.
+  mkdir -p /var/lib/gym /dev/disk/by-gym /var/lib/sessions /srv/sessions
+  truncate -s 32M /var/lib/gym/sessions-volume.img
+  cat > /usr/local/sbin/gym-phantom-full-start <<'EOF'
+#!/bin/bash
+set -euo pipefail
+image=/var/lib/gym/sessions-volume.img
+loop=
+cleanup_failed_start() {
+  local status=$?
+  if (( status != 0 )); then
+    [[ -s /run/gym-phantom-full.holder ]] && kill "$(< /run/gym-phantom-full.holder)" 2>/dev/null || true
+    [[ -s /run/gym-phantom-full.autoclear ]] && kill "$(< /run/gym-phantom-full.autoclear)" 2>/dev/null || true
+    mountpoint -q /var/lib/sessions && umount /var/lib/sessions || true
+    if [[ -n "$loop" ]] && losetup -j "$image" | grep -F "$loop:" | grep -F "($image)" >/dev/null; then
+      losetup -d "$loop"
+    fi
+    rm -f /dev/disk/by-gym/sessions-vol /run/gym-phantom-full.loop /run/gym-phantom-full.holder /run/gym-phantom-full.autoclear
+  fi
+  exit "$status"
+}
+trap cleanup_failed_start EXIT
+mkdir -p /dev/disk/by-gym
+mountpoint -q /var/lib/sessions || mount -t tmpfs -o size=32M,nr_inodes=2048 tmpfs /var/lib/sessions
+chown juanes:juanes /var/lib/sessions
+for n in $(seq -w 1 1000); do
+  printf 'old session %s\n' "$n" > "/var/lib/sessions/old-session-$n.dat"
+done
+for n in $(seq -w 1 1047); do
+  printf 'fresh session %s\n' "$n" > "/var/lib/sessions/fresh-session-$n.dat"
+done
+find /var/lib/sessions -type f -name 'old-session-*.dat' -exec touch -d '14 days ago' {} +
+find /var/lib/sessions -type f -name 'fresh-session-*.dat' -exec touch -d '1 day ago' {} +
+chown juanes:juanes /var/lib/sessions/*
+
+# Assert both the loop type and its backing file before publishing the path.
+loop=$(losetup --find --show "$image")
+case "$loop" in /dev/loop[0-9]*) ;; *) echo "refusing unexpected loop path: $loop" >&2; exit 1 ;; esac
+losetup -j "$image" | grep -F "$loop:" | grep -F "($image)" >/dev/null || { echo "loop backing check failed" >&2; exit 1; }
+# Privileged containers use host loop devices. Set LOOP_AUTOCLEAR through the
+# kernel loop ioctl so forced container removal cannot leave the host device.
+cat > /usr/local/sbin/gym-phantom-autoclear <<'PERL'
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Fcntl qw(O_RDWR);
+my $device = shift or die "device path required\n";
+sysopen(my $fh, $device, O_RDWR) or die "open $device: $!\n";
+my $status = "\0" x 232; # struct loop_info64
+ioctl($fh, 0x4C05, $status) or die "LOOP_GET_STATUS64: $!\n";
+my $flags = unpack("L", substr($status, 52, 4));
+substr($status, 52, 4, pack("L", $flags | 4)); # LO_FLAGS_AUTOCLEAR
+ioctl($fh, 0x4C04, $status) or die "LOOP_SET_STATUS64: $!\n";
+$status = "\0" x 232;
+ioctl($fh, 0x4C05, $status) or die "LOOP_GET_STATUS64 verify: $!\n";
+die "loop autoclear flag did not stick\n" unless unpack("L", substr($status, 52, 4)) & 4;
+open(my $pidfile, ">", "/run/gym-phantom-full.autoclear") or die "write pid file: $!\n";
+print {$pidfile} "$$\n";
+close($pidfile);
+# Keep the loop fd open until the mounted filesystem owns the device reference.
+for (1..1800) {
+  my $source = `findmnt -rn -o SOURCE --target /srv/sessions 2>/dev/null`;
+  exit 0 if $? == 0 && $source =~ /^\Q$device\E\s*$/;
+  sleep 1;
+}
+PERL
+chmod 755 /usr/local/sbin/gym-phantom-autoclear
+touch /run/gym-phantom-full.autoclear
+setsid -f /usr/local/sbin/gym-phantom-autoclear "$loop" </dev/null >/dev/null 2>&1
+for _ in $(seq 1 50); do [[ -s /run/gym-phantom-full.autoclear ]] && break; sleep 0.1; done
+test -s /run/gym-phantom-full.autoclear
+losetup -j "$image" | grep -F "$loop:" | grep -F "($image)" >/dev/null
+ln -sfn "$loop" /dev/disk/by-gym/sessions-vol
+printf '%s\n' "$loop" > /run/gym-phantom-full.loop
+# The old mount is held busy by a learner-owned process with its cwd there.
+cat > /usr/local/sbin/gym-phantom-holder <<'HOLDER'
+#!/bin/bash
+cd /var/lib/sessions
+printf '%s\n' "$$" > /run/gym-phantom-full.holder
+exec sleep infinity
+HOLDER
+chmod 755 /usr/local/sbin/gym-phantom-holder
+touch /run/gym-phantom-full.holder
+chmod 666 /run/gym-phantom-full.holder
+runuser -u juanes -- setsid -f /usr/local/sbin/gym-phantom-holder </dev/null >/dev/null 2>&1
+for _ in $(seq 1 50); do [[ -s /run/gym-phantom-full.holder ]] && break; sleep 0.1; done
+test -s /run/gym-phantom-full.holder
+EOF
+  cat > /usr/local/sbin/gym-phantom-full-stop <<'EOF'
+#!/bin/bash
+set -euo pipefail
+image=/var/lib/gym/sessions-volume.img
+if [[ -s /run/gym-phantom-full.holder ]]; then
+  kill "$(< /run/gym-phantom-full.holder)" 2>/dev/null || true
+fi
+if mountpoint -q /srv/sessions; then umount /srv/sessions; fi
+if mountpoint -q /var/lib/sessions; then umount /var/lib/sessions; fi
+if [[ -s /run/gym-phantom-full.autoclear ]]; then
+  kill "$(< /run/gym-phantom-full.autoclear)" 2>/dev/null || true
+fi
+loop=$(losetup -j "$image" | cut -d: -f1)
+if [[ -n "$loop" ]]; then
+  case "$loop" in /dev/loop[0-9]*) ;; *) echo "refusing detach of $loop" >&2; exit 1 ;; esac
+  losetup -j "$image" | grep -F "$loop:" >/dev/null || exit 1
+  losetup -d "$loop"
+fi
+rm -f /dev/disk/by-gym/sessions-vol /run/gym-phantom-full.loop /run/gym-phantom-full.holder /run/gym-phantom-full.autoclear
+EOF
+  chmod 755 /usr/local/sbin/gym-phantom-full-start /usr/local/sbin/gym-phantom-full-stop
+  cat > /etc/systemd/system/gym-phantom-full.service <<'EOF'
+[Unit]
+Description=Disposable storage incident fixture
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/gym-phantom-full-start
+ExecStop=/usr/local/sbin/gym-phantom-full-stop
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-phantom-full.service
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -634,6 +764,7 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
+  storage_phantom_full
 }
 
 main "$@"
