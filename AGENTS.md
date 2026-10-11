@@ -102,9 +102,13 @@ When Juanes asks for help, hints, or questions while working through a ticket:
 | 03-text | cat head tail grep sort uniq cut tr xargs wc echo mkdir | 01-log-triage, 02-csv-rescue |
 | 04-users-perms | groups adduser deluser chmod chown chgrp su usermod id find ls stat rm cat touch | 01-offboard-onboard, 02-perm-meltdown |
 | 05-processes | ps pgrep kill fg bg jobs sleep pstree | 01-log-flood, 02-immortal-daemon |
+| 06-services | systemctl (status start stop restart enable is-enabled is-active cat edit daemon-reload show) journalctl (-u -b -p -n -f --since) sudo chmod ls cat kill ps | 01-crash-loop |
 | 07-git | git (status log branch switch config fetch pull push stash revert merge diff add commit rm reflog tag blame show) vim cat echo | 01-release-day |
 | 08-search | grep (-r -F -i -w -E -n -c -l -L -v -o -C --exclude-dir) find (-name -iname -type -mtime -maxdepth -perm -path -not -o -exec {} +) sudo sort uniq wc cat echo | 01-leaked-secret |
-| 06-services | systemctl journalctl chmod ls cat kill ps | 01-crash-loop |
+| 09-resources | uptime free top ps nice renice systemctl journalctl | 01-slow-box |
+| 10-scripting | bash chmod echo $? set tar cmp diff crontab env export command -v vim cat ls grep | 01-silent-backup |
+| 11-packages | apt (update install --reinstall remove purge show policy) apt-get -s upgrade dpkg (-S -L -l --verify) apt-mark (hold showhold) command -v ls grep tee | 01-tampered-binary |
+| 12-storage | df du find wc lsblk blkid mkfs.ext4 mount umount findmnt lsof ps kill grep sudo cat | 01-phantom-full |
 
 ## Planned topics (near future)
 
