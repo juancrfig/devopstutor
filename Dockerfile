@@ -26,10 +26,32 @@ RUN useradd -m -s /bin/bash juanes \
     && printf 'set bell-style none\n' > /home/juanes/.inputrc \
     && chown juanes:juanes /home/juanes/.inputrc
 
+# systemd as PID 1, so services, timers and cron run for real (06-services and
+# later topics). The base image ships systemd; systemd-sysv adds /sbin/init,
+# and dbus lets juanes run `systemctl status` without sudo.
+RUN apt-get update && apt-get install -y --no-install-recommends systemd-sysv dbus \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tell systemd it runs in a container. Mask the units that would touch host
+# devices or wait for a console: the lab is --privileged, so udev and module
+# loading must stay off.
+ENV container=docker
+RUN systemctl mask \
+      systemd-udevd.service systemd-udevd-kernel.socket systemd-udevd-control.socket \
+      systemd-udev-trigger.service systemd-modules-load.service \
+      systemd-remount-fs.service sys-kernel-config.mount sys-kernel-debug.mount \
+      sys-kernel-tracing.mount sys-fs-fuse-connections.mount \
+      getty.target console-getty.service systemd-firstboot.service \
+      systemd-timesyncd.service systemd-networkd-wait-online.service
+
+# Like the first user on a real Ubuntu box, juanes is in adm, so journalctl
+# shows system logs without sudo.
+RUN usermod -aG adm juanes
+
 COPY setup.sh /setup.sh
 RUN chmod +x /setup.sh && /setup.sh
 
-USER juanes
-WORKDIR /home/juanes
-
-CMD ["/bin/bash"]
+# PID 1 is init and runs as root. run.sh opens your shell as juanes with
+# `docker exec`, in /home/juanes.
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

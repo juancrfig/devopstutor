@@ -1,9 +1,9 @@
 # AGENTS.md — devops_gym
 
 Single shared Docker container for all DevOps/Linux gym tickets. Fresh build per
-session; `--rm` so no state persists between runs. Juanes opens the container
-himself — agents write guides, setup.sh broken states, and coach/assist Juanes
-through tickets.
+session; the container is removed on exit, so no state persists between runs.
+Juanes opens the container himself — agents write guides, setup.sh broken
+states, and coach/assist Juanes through tickets.
 
 ## Structure
 
@@ -11,7 +11,7 @@ through tickets.
 devops_gym/
 ├── Dockerfile       ← ubuntu:24.04, user juanes (NOPASSWD sudo)
 ├── setup.sh         ← fabricates broken state; grows as tickets are added
-├── run.sh           ← docker build + docker run --rm -it --hostname devops-lab
+├── run.sh           ← docker build, boot systemd detached, docker exec a shell as juanes
 ├── gym              ← TUI launcher; Leitner scheduling in .gym-ledger
 └── pool/
     └── <topic>/<scenario>/guide.md
@@ -20,14 +20,28 @@ devops_gym/
 ## Container decisions (settled)
 
 - One container, all topics. Base: `ubuntu:24.04`.
-- Fresh build per session (`./run.sh` always rebuilds). `--rm` wipes on exit.
+- systemd is PID 1 (`CMD /sbin/init`, `ENV container=docker`, units that touch
+  host devices masked). `run.sh` starts the container detached with
+  `--privileged --tmpfs /run --tmpfs /run/lock`, retries
+  `systemctl is-system-running --wait` until `running` or `degraded` (a ticket
+  may ship a failed unit on purpose), then `docker exec -it -u juanes` a bash.
+  A trap removes the container when that shell exits.
+- juanes is in `adm`, like the first user on real Ubuntu, so `journalctl`
+  shows system logs without sudo. dbus is installed so `systemctl status`
+  works without sudo.
+- Fresh build per session (`./run.sh` always rebuilds).
 - No `check.sh` — concept questions go to Claude post-solve.
 - `setup.sh` is one growing file. Refactor only when it hurts.
 - Juanes opens the container himself; the `gym` TUI serves guides separately.
 - Scheduling lives in `.gym-ledger` (Leitner, managed by `gym`). No external
   ledger — the old vault ledger is retired.
 - Live incident processes (log flooder, zombie, respawner, traffic writer)
-  are started by a guarded block in `/etc/bash.bashrc` at first shell.
+  are started by a guarded block in `/etc/bash.bashrc` at first shell. Ticket
+  services that systemd should own are units enabled at build time instead
+  (`systemctl enable` only writes symlinks, so it works without a running
+  systemd).
+- Boot wipes `/tmp` (systemd-tmpfiles). The launchers' `/tmp/.gym-*` markers
+  are safe only because run.sh waits for boot before the first shell.
 
 ## Adding a ticket
 
@@ -90,7 +104,7 @@ When Juanes asks for help, hints, or questions while working through a ticket:
 | 05-processes | ps pgrep kill fg bg jobs sleep pstree | 01-log-flood, 02-immortal-daemon |
 | 07-git | git (status log branch switch config fetch pull push stash revert merge diff add commit rm reflog tag blame show) vim cat echo | 01-release-day |
 | 08-search | grep (-r -F -i -w -E -n -c -l -L -v -o -C --exclude-dir) find (-name -iname -type -mtime -maxdepth -perm -path -not -o -exec {} +) sudo sort uniq wc cat echo | 01-leaked-secret |
-| 06-services | systemctl journalctl — **parked**: plain container has no systemd PID 1. Unpark plan: systemd-as-PID-1 image run with `--cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup` (or podman). Until then, systemd theory rides in 05-processes questions. | — |
+| 06-services | systemctl journalctl | — |
 
 ## Planned topics (near future)
 
@@ -98,5 +112,4 @@ Missing for mid-level interview coverage; next expansion wave:
 
 - **networking** — ss, curl, dig, ports, "service can't reach DB" scenarios
 - **ssh** — keys, scp, config, agent
-- **systemd** — hands-on units (unparks 06-services via the plan above)
 - **junior-gauntlet** — **[design by 2026-08-13]** Combo incident: SSH into a wild server with multiple simultaneous issues — zombie processes, missing services, unusual memory usage, and dangerously high load averages. Mimics a real-world demanding scenario. Junior DevOps rite of passage. Mixes processes, files, text, and perms tools in one ticket.
