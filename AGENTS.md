@@ -40,6 +40,10 @@ devops_gym/
   services that systemd should own are units enabled at build time instead
   (`systemctl enable` only writes symlinks, so it works without a running
   systemd).
+- Costly fixtures run only for their own ticket. `gym` writes the ticket it
+  serves to the gitignored `.gym-active`; after boot, `run.sh` starts
+  `report-builder.service` and `thumbnailer.service` (installed, not enabled)
+  only when that file says `09-resources/01-slow-box`.
 - Boot wipes `/tmp` (systemd-tmpfiles). The launchers' `/tmp/.gym-*` markers
   are safe only because run.sh waits for boot before the first shell.
 
