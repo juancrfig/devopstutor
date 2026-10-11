@@ -808,7 +808,7 @@ MemoryAccounting=yes
 MemoryMax=64M
 MemorySwapMax=0
 Restart=always
-RestartSec=5s
+RestartSec=30s
 
 [Install]
 WantedBy=multi-user.target
@@ -932,6 +932,25 @@ runtime_release_links() {
   # blocks remain allocated until the final directory entry is removed.
 }
 
+# ══ 11-packages / 01-tampered-binary ═══════════════════════════════
+
+packages_tampered_binary() {
+  # Wget is installed but unrelated to any lab command, so it is safe to
+  # corrupt without breaking interactive paging or other ticket workflows.
+  cat > /usr/bin/wget <<'EOF'
+#!/bin/sh
+echo 'SECURITY ALERT: downloader integrity check failed'
+EOF
+  chmod 755 /usr/bin/wget
+
+  mkdir -p /opt/tools/bin
+  cat > /opt/tools/bin/tree <<'EOF'
+#!/bin/sh
+echo 'tree 1.7.0 (old local copy)'
+EOF
+  chmod 755 /opt/tools/bin/tree
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -973,6 +992,14 @@ EOF
 }
 
 main() {
+  if [[ ${1:-} == "runtime-silent-backup" ]]; then
+    runtime_silent_backup
+    exit 0
+  fi
+  if [[ ${1:-} == "runtime-release-links" ]]; then
+    runtime_release_links
+    exit 0
+  fi
   if [[ ${1:-} == "runtime-leaked-secret" ]]; then
     runtime_leaked_secret
     exit 0

@@ -6,7 +6,7 @@ A runbook says a utility is installed, but the command still cannot be found. At
 
 1. Diagnose the missing utility. A stale copy sits in `/opt/tools/bin`, which is not on your normal search path. Install the distro package, then record the utility's version and the repository it came from.
 2. Check installed package files. Ignore missing documentation and modified configuration files; exactly one non-configuration file is modified. Identify its owning package, reinstall only that package, and verify that file is clean.
-3. Hold the `less` package at its current version. Prove the hold using the package manager's simulated upgrade; if the current repository has no newer `less` version, show the hold list and state that the simulation had no upgrade to skip.
+3. Hold the `wget` package at its current version. Prove the hold using the package manager's simulated upgrade; if the current repository has no newer `wget` version, show the hold list and state that the simulation had no upgrade to skip.
 4. Remove the `cron` package and record its package state and remaining configuration file. Then purge it and show that the configuration file is gone.
 
 ## COMMANDS
