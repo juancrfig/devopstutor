@@ -560,6 +560,286 @@ fi
 EOF
 }
 
+# ══ 02-files / 03-release-links ════════════════════════════════════
+
+files_release_links() {
+  local root=/srv/app
+  mkdir -p "$root"/releases/v{1,2,3} /etc/nginx/sites-{available,enabled}
+
+  # A stale active release and one stale nginx-style site link make two
+  # broken links in the searched trees; the other links resolve normally.
+  printf 'release v1\n' > "$root/releases/v1/index.html"
+  printf 'release v2\n' > "$root/releases/v2/index.html"
+  printf 'release v3\n' > "$root/releases/v3/index.html"
+  ln -s releases/v9 "$root/current"
+  ln -s releases/v1 "$root/previous"
+  printf 'server { listen 8080; }\n' > /etc/nginx/sites-available/shop.conf
+  ln -s ../sites-available/shop.conf /etc/nginx/sites-enabled/shop.conf
+  ln -s ../sites-available/retired.conf /etc/nginx/sites-enabled/retired.conf
+  chown -R juanes:juanes "$root" /etc/nginx
+
+  # A dedicated runtime tmpfs makes df meaningful and keeps the hard-link
+  # pair on one filesystem. Removing one name leaves the same blocks allocated.
+  cat > /etc/systemd/system/gym-release-links.service <<'EOF'
+[Unit]
+Description=Create release-links filesystem fixture
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/setup.sh runtime-release-links
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-release-links.service >/dev/null
+}
+
+runtime_release_links() {
+  local mount=/srv/app/logfs
+  mkdir -p "$mount"
+  mountpoint -q "$mount" || mount -t tmpfs -o size=48M tmpfs "$mount"
+  mkdir -p "$mount/logs" "$mount/archive"
+  dd if=/dev/zero of="$mount/logs/api.log" bs=1M count=24 status=none
+  ln "$mount/logs/api.log" "$mount/archive/api.log"
+  chown -R juanes:juanes "$mount"
+  # Both names are present so the learner can observe unlinking one name:
+  # blocks remain allocated until the final directory entry is removed.
+}
+
+# ══ 06-services / 01-crash-loop ════════════════════════════════════
+
+services_crash_loop() {
+  local app=/usr/local/bin/shop-api
+  mkdir -p /etc/shop-api /var/lib/shop-api
+
+  # This tiny service makes PORT the last application-level failure; no
+  # listener or extra package is needed to exercise systemd's restart policy.
+  cat > "$app" <<'EOF'
+#!/bin/bash
+if [[ -z ${PORT:-} ]]; then
+  echo 'shop-api: PORT is not set; refusing to start' >&2
+  exit 1
+fi
+while true; do
+  echo "shop-api: heartbeat on port $PORT"
+  sleep 2
+done
+EOF
+  # Deliberately leave the execute bit off to produce systemd's 203/EXEC.
+  chmod 644 "$app"
+
+  cat > /lib/systemd/system/shop-api.service <<'EOF'
+[Unit]
+Description=Shop API
+After=network.target
+StartLimitBurst=10
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/shop-api/shop-api.env
+ExecStart=/usr/local/bin/shop-api
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  cp /lib/systemd/system/shop-api.service /var/lib/shop-api/shop-api.service.pristine
+  cat > /var/lib/shop-api/teammate-note.txt <<'EOF'
+Teammate note: I changed the vendor unit Description from "Shop API" to
+"Shop API (temporary deploy fix)" after the manager loaded it. The pristine
+vendor copy is shop-api.service.pristine. Keep durable fixes in /etc.
+EOF
+
+  # The boot fixture loads the vendor definition first, then changes its
+  # Description without reloading systemd, reproducing the stale-manager warning.
+  cat > /usr/local/sbin/gym-shop-api-fixture <<'EOF'
+#!/bin/bash
+set -euo pipefail
+systemctl start shop-api.service >/dev/null 2>&1 || true
+sed -i 's/^Description=Shop API$/Description=Shop API (temporary deploy fix)/' \
+  /lib/systemd/system/shop-api.service
+EOF
+  chmod 755 /usr/local/sbin/gym-shop-api-fixture
+  cat > /etc/systemd/system/gym-shop-api-fixture.service <<'EOF'
+[Unit]
+Description=Prepare the Shop API crash-loop exercise
+After=basic.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gym-shop-api-fixture
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-shop-api-fixture.service >/dev/null
+}
+
+# ══ 09-resources / 01-slow-box ═════════════════════════════════════
+
+resources_slow_box() {
+  mkdir -p /usr/local/bin
+
+  # This report is useful work, but its CPU-bound render is unusually slow.
+  # It is bounded to twenty minutes and capped at one CPU so it cannot run away.
+  cat > /usr/local/bin/report-builder <<'EOF'
+#!/bin/bash
+start=$SECONDS
+while (( SECONDS - start < 1200 )); do :; done
+echo "report build completed"
+EOF
+  chmod 755 /usr/local/bin/report-builder
+  cat > /etc/systemd/system/report-builder.service <<'EOF'
+[Unit]
+Description=Generate the nightly sales report
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/report-builder
+Nice=0
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Deliberately over-allocates its 64 MiB cgroup limit. RestartSec and a
+  # disabled start limiter make each OOM visible without a frantic restart loop.
+  cat > /usr/local/bin/thumbnailer <<'EOF'
+#!/usr/bin/perl
+my @image_chunks;
+for (1 .. 100) {
+  push @image_chunks, "x" x (1024 * 1024);
+}
+select undef, undef, undef, 15;
+print "thumbnail complete\n";
+EOF
+  chmod 755 /usr/local/bin/thumbnailer
+  cat > /etc/systemd/system/thumbnailer.service <<'EOF'
+[Unit]
+Description=Build nightly product thumbnails
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/thumbnailer
+MemoryAccounting=yes
+MemoryMax=64M
+MemorySwapMax=0
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable report-builder.service thumbnailer.service
+}
+
+# ══ 10-scripting / 01-silent-backup ════════════════════════════════
+
+scripting_silent_backup() {
+  local data=/srv/shop-data archives=/var/backups/shop
+  mkdir -p "$data" "$archives" /opt/shop/bin
+  printf 'order=SO-1042\n' > "$data/order-1042.txt"
+  printf 'leave at reception\n' > "$data/customer notes.txt"
+  chown -R juanes:juanes "$data" "$archives"
+
+  # The two plausible-looking archives are valid tarballs, but contain no data.
+  tar -czf "$archives/shop-2026-10-09.tar.gz" --files-from /dev/null
+  tar -czf "$archives/shop-2026-10-10.tar.gz" --files-from /dev/null
+  chown juanes:juanes "$archives"/*.tar.gz
+
+  # Keep relative ages fresh across cached image builds.
+  cat > /usr/local/bin/backup-shop-runtime <<'EOF'
+#!/bin/bash
+set -euo pipefail
+for archive in /var/backups/shop/*.tar.gz; do
+  touch -d '1 day ago' "$archive"
+done
+EOF
+  chmod 755 /usr/local/bin/backup-shop-runtime
+  cat > /etc/systemd/system/gym-10-scripting-01-silent-backup.service <<'EOF'
+[Unit]
+Description=Create relative-time silent-backup fixtures
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/setup.sh runtime-silent-backup
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-10-scripting-01-silent-backup.service
+
+  # Cron deliberately cannot see this interactive-only helper path.
+  cat > /opt/shop/bin/backup-note <<'EOF'
+#!/bin/bash
+echo 'backup helper reached'
+EOF
+  chmod 755 /opt/shop/bin/backup-note
+  printf '\n# Shop backup helper available in interactive shells only.\nexport PATH="$PATH:/opt/shop/bin"\n' >> /home/juanes/.bashrc
+  chown juanes:juanes /home/juanes/.bashrc
+
+  # Keep the typo and missing execute bit, but constrain the mistaken archive
+  # to the shop tree: the missing cd is ignored and the unquoted glob splits.
+  cat > /usr/local/bin/backup-shop.sh <<'EOF'
+#!/bin/sh
+cd /srv/shop-data-misspelled
+archive=/var/backups/shop/shop-$(date +%F-%H%M%S).tar.gz
+tar -czf $archive /srv/shop-data/*
+backup-note
+echo 'Backup OK'
+exit 0
+EOF
+  chown juanes:juanes /usr/local/bin/backup-shop.sh
+  chmod 644 /usr/local/bin/backup-shop.sh
+}
+
+# At boot, establish mtimes against the actual session date, not image-build time.
+runtime_silent_backup() {
+  /usr/local/bin/backup-shop-runtime
+}
+
+# ══ 11-packages / 01-tampered-binary ═══════════════════════════════
+
+packages_tampered_binary() {
+  # Wget is installed but unrelated to any lab command, so it is safe to
+  # corrupt without breaking interactive paging or other ticket workflows.
+  cat > /usr/bin/wget <<'EOF'
+#!/bin/sh
+echo 'SECURITY ALERT: downloader integrity check failed'
+EOF
+  chmod 755 /usr/bin/wget
+
+  mkdir -p /opt/tools/bin
+  cat > /opt/tools/bin/tree <<'EOF'
+#!/bin/sh
+echo 'tree 1.7.0 (old local copy)'
+EOF
+  chmod 755 /opt/tools/bin/tree
+}
+
+# ══ live processes: started at first interactive shell ═════════════
+
+install_live_launcher() {
+  cat >> /etc/bash.bashrc <<'EOF'
+
+# devops_gym: fabricate live incident processes, once per container.
+if [ ! -e /tmp/.gym-live ]; then
+  touch /tmp/.gym-live
+  # No PAM login under docker exec, so /etc/motd never self-displays.
+  # First interactive shell is the "login": show the handover note.
+  [ -r /etc/motd ] && cat /etc/motd
+  nohup /usr/local/bin/traffic-writer  >/dev/null 2>&1 &
+  nohup /usr/local/bin/svc-wrapper     >/dev/null 2>&1 &
+  nohup /usr/local/bin/zombie-maker    >/dev/null 2>&1 &
+  nohup /usr/local/bin/watchdog-nanny  >/dev/null 2>&1 &
+fi
+EOF
+}
+
 # ══ 12-storage / 01-phantom-full ═══════════════════════════════════
 
 storage_phantom_full() {
@@ -688,286 +968,6 @@ ExecStop=/usr/local/sbin/gym-phantom-full-stop
 WantedBy=multi-user.target
 EOF
   systemctl enable gym-phantom-full.service
-}
-
-# ══ 10-scripting / 01-silent-backup ════════════════════════════════
-
-scripting_silent_backup() {
-  local data=/srv/shop-data archives=/var/backups/shop
-  mkdir -p "$data" "$archives" /opt/shop/bin
-  printf 'order=SO-1042\n' > "$data/order-1042.txt"
-  printf 'leave at reception\n' > "$data/customer notes.txt"
-  chown -R juanes:juanes "$data" "$archives"
-
-  # The two plausible-looking archives are valid tarballs, but contain no data.
-  tar -czf "$archives/shop-2026-10-09.tar.gz" --files-from /dev/null
-  tar -czf "$archives/shop-2026-10-10.tar.gz" --files-from /dev/null
-  chown juanes:juanes "$archives"/*.tar.gz
-
-  # Keep relative ages fresh across cached image builds.
-  cat > /usr/local/bin/backup-shop-runtime <<'EOF'
-#!/bin/bash
-set -euo pipefail
-for archive in /var/backups/shop/*.tar.gz; do
-  touch -d '1 day ago' "$archive"
-done
-EOF
-  chmod 755 /usr/local/bin/backup-shop-runtime
-  cat > /etc/systemd/system/gym-10-scripting-01-silent-backup.service <<'EOF'
-[Unit]
-Description=Create relative-time silent-backup fixtures
-After=local-fs.target
-
-[Service]
-Type=oneshot
-ExecStart=/setup.sh runtime-silent-backup
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl enable gym-10-scripting-01-silent-backup.service
-
-  # Cron deliberately cannot see this interactive-only helper path.
-  cat > /opt/shop/bin/backup-note <<'EOF'
-#!/bin/bash
-echo 'backup helper reached'
-EOF
-  chmod 755 /opt/shop/bin/backup-note
-  printf '\n# Shop backup helper available in interactive shells only.\nexport PATH="$PATH:/opt/shop/bin"\n' >> /home/juanes/.bashrc
-  chown juanes:juanes /home/juanes/.bashrc
-
-  # Keep the typo and missing execute bit, but constrain the mistaken archive
-  # to the shop tree: the missing cd is ignored and the unquoted glob splits.
-  cat > /usr/local/bin/backup-shop.sh <<'EOF'
-#!/bin/sh
-cd /srv/shop-data-misspelled
-archive=/var/backups/shop/shop-$(date +%F-%H%M%S).tar.gz
-tar -czf $archive /srv/shop-data/*
-backup-note
-echo 'Backup OK'
-exit 0
-EOF
-  chown juanes:juanes /usr/local/bin/backup-shop.sh
-  chmod 644 /usr/local/bin/backup-shop.sh
-}
-
-# At boot, establish mtimes against the actual session date, not image-build time.
-runtime_silent_backup() {
-  /usr/local/bin/backup-shop-runtime
-}
-
-# ══ 09-resources / 01-slow-box ═════════════════════════════════════
-
-resources_slow_box() {
-  mkdir -p /usr/local/bin
-
-  # This report is useful work, but its CPU-bound render is unusually slow.
-  # It is bounded to twenty minutes and capped at one CPU so it cannot run away.
-  cat > /usr/local/bin/report-builder <<'EOF'
-#!/bin/bash
-start=$SECONDS
-while (( SECONDS - start < 1200 )); do :; done
-echo "report build completed"
-EOF
-  chmod 755 /usr/local/bin/report-builder
-  cat > /etc/systemd/system/report-builder.service <<'EOF'
-[Unit]
-Description=Generate the nightly sales report
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/report-builder
-Nice=0
-CPUQuota=100%
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  # Deliberately over-allocates its 64 MiB cgroup limit. RestartSec and a
-  # disabled start limiter make each OOM visible without a frantic restart loop.
-  cat > /usr/local/bin/thumbnailer <<'EOF'
-#!/usr/bin/perl
-my @image_chunks;
-for (1 .. 100) {
-  push @image_chunks, "x" x (1024 * 1024);
-}
-select undef, undef, undef, 15;
-print "thumbnail complete\n";
-EOF
-  chmod 755 /usr/local/bin/thumbnailer
-  cat > /etc/systemd/system/thumbnailer.service <<'EOF'
-[Unit]
-Description=Build nightly product thumbnails
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/thumbnailer
-MemoryAccounting=yes
-MemoryMax=64M
-MemorySwapMax=0
-Restart=always
-RestartSec=30s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl enable report-builder.service thumbnailer.service
-}
-
-# ══ 06-services / 01-crash-loop ════════════════════════════════════
-
-services_crash_loop() {
-  local app=/usr/local/bin/shop-api
-  mkdir -p /etc/shop-api /var/lib/shop-api
-
-  # This tiny service makes PORT the last application-level failure; no
-  # listener or extra package is needed to exercise systemd's restart policy.
-  cat > "$app" <<'EOF'
-#!/bin/bash
-if [[ -z ${PORT:-} ]]; then
-  echo 'shop-api: PORT is not set; refusing to start' >&2
-  exit 1
-fi
-while true; do
-  echo "shop-api: heartbeat on port $PORT"
-  sleep 2
-done
-EOF
-  # Deliberately leave the execute bit off to produce systemd's 203/EXEC.
-  chmod 644 "$app"
-
-  cat > /lib/systemd/system/shop-api.service <<'EOF'
-[Unit]
-Description=Shop API
-After=network.target
-StartLimitBurst=10
-
-[Service]
-Type=simple
-EnvironmentFile=/etc/shop-api/shop-api.env
-ExecStart=/usr/local/bin/shop-api
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  cp /lib/systemd/system/shop-api.service /var/lib/shop-api/shop-api.service.pristine
-  cat > /var/lib/shop-api/teammate-note.txt <<'EOF'
-Teammate note: I changed the vendor unit Description from "Shop API" to
-"Shop API (temporary deploy fix)" after the manager loaded it. The pristine
-vendor copy is shop-api.service.pristine. Keep durable fixes in /etc.
-EOF
-
-  # The boot fixture loads the vendor definition first, then changes its
-  # Description without reloading systemd, reproducing the stale-manager warning.
-  cat > /usr/local/sbin/gym-shop-api-fixture <<'EOF'
-#!/bin/bash
-set -euo pipefail
-systemctl start shop-api.service >/dev/null 2>&1 || true
-sed -i 's/^Description=Shop API$/Description=Shop API (temporary deploy fix)/' \
-  /lib/systemd/system/shop-api.service
-EOF
-  chmod 755 /usr/local/sbin/gym-shop-api-fixture
-  cat > /etc/systemd/system/gym-shop-api-fixture.service <<'EOF'
-[Unit]
-Description=Prepare the Shop API crash-loop exercise
-After=basic.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/gym-shop-api-fixture
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl enable gym-shop-api-fixture.service >/dev/null
-}
-
-# ══ 02-files / 03-release-links ════════════════════════════════════
-
-files_release_links() {
-  local root=/srv/app
-  mkdir -p "$root"/releases/v{1,2,3} /etc/nginx/sites-{available,enabled}
-
-  # A stale active release and one stale nginx-style site link make two
-  # broken links in the searched trees; the other links resolve normally.
-  printf 'release v1\n' > "$root/releases/v1/index.html"
-  printf 'release v2\n' > "$root/releases/v2/index.html"
-  printf 'release v3\n' > "$root/releases/v3/index.html"
-  ln -s releases/v9 "$root/current"
-  ln -s releases/v1 "$root/previous"
-  printf 'server { listen 8080; }\n' > /etc/nginx/sites-available/shop.conf
-  ln -s ../sites-available/shop.conf /etc/nginx/sites-enabled/shop.conf
-  ln -s ../sites-available/retired.conf /etc/nginx/sites-enabled/retired.conf
-  chown -R juanes:juanes "$root" /etc/nginx
-
-  # A dedicated runtime tmpfs makes df meaningful and keeps the hard-link
-  # pair on one filesystem. Removing one name leaves the same blocks allocated.
-  cat > /etc/systemd/system/gym-release-links.service <<'EOF'
-[Unit]
-Description=Create release-links filesystem fixture
-After=local-fs.target
-
-[Service]
-Type=oneshot
-ExecStart=/setup.sh runtime-release-links
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl enable gym-release-links.service >/dev/null
-}
-
-runtime_release_links() {
-  local mount=/srv/app/logfs
-  mkdir -p "$mount"
-  mountpoint -q "$mount" || mount -t tmpfs -o size=48M tmpfs "$mount"
-  mkdir -p "$mount/logs" "$mount/archive"
-  dd if=/dev/zero of="$mount/logs/api.log" bs=1M count=24 status=none
-  ln "$mount/logs/api.log" "$mount/archive/api.log"
-  chown -R juanes:juanes "$mount"
-  # Both names are present so the learner can observe unlinking one name:
-  # blocks remain allocated until the final directory entry is removed.
-}
-
-# ══ 11-packages / 01-tampered-binary ═══════════════════════════════
-
-packages_tampered_binary() {
-  # Wget is installed but unrelated to any lab command, so it is safe to
-  # corrupt without breaking interactive paging or other ticket workflows.
-  cat > /usr/bin/wget <<'EOF'
-#!/bin/sh
-echo 'SECURITY ALERT: downloader integrity check failed'
-EOF
-  chmod 755 /usr/bin/wget
-
-  mkdir -p /opt/tools/bin
-  cat > /opt/tools/bin/tree <<'EOF'
-#!/bin/sh
-echo 'tree 1.7.0 (old local copy)'
-EOF
-  chmod 755 /opt/tools/bin/tree
-}
-
-# ══ live processes: started at first interactive shell ═════════════
-
-install_live_launcher() {
-  cat >> /etc/bash.bashrc <<'EOF'
-
-# devops_gym: fabricate live incident processes, once per container.
-if [ ! -e /tmp/.gym-live ]; then
-  touch /tmp/.gym-live
-  # No PAM login under docker exec, so /etc/motd never self-displays.
-  # First interactive shell is the "login": show the handover note.
-  [ -r /etc/motd ] && cat /etc/motd
-  nohup /usr/local/bin/traffic-writer  >/dev/null 2>&1 &
-  nohup /usr/local/bin/svc-wrapper     >/dev/null 2>&1 &
-  nohup /usr/local/bin/zombie-maker    >/dev/null 2>&1 &
-  nohup /usr/local/bin/watchdog-nanny  >/dev/null 2>&1 &
-fi
-EOF
 }
 
 # ══ 02-files / 01-disk-bloat: dedicated runtime filesystem ════════
