@@ -560,6 +560,72 @@ fi
 EOF
 }
 
+# ══ 10-scripting / 01-silent-backup ════════════════════════════════
+
+scripting_silent_backup() {
+  local data=/srv/shop-data archives=/var/backups/shop
+  mkdir -p "$data" "$archives" /opt/shop/bin
+  printf 'order=SO-1042\n' > "$data/order-1042.txt"
+  printf 'leave at reception\n' > "$data/customer notes.txt"
+  chown -R juanes:juanes "$data" "$archives"
+
+  # The two plausible-looking archives are valid tarballs, but contain no data.
+  tar -czf "$archives/shop-2026-10-09.tar.gz" --files-from /dev/null
+  tar -czf "$archives/shop-2026-10-10.tar.gz" --files-from /dev/null
+  chown juanes:juanes "$archives"/*.tar.gz
+
+  # Keep relative ages fresh across cached image builds.
+  cat > /usr/local/bin/backup-shop-runtime <<'EOF'
+#!/bin/bash
+set -euo pipefail
+for archive in /var/backups/shop/*.tar.gz; do
+  touch -d '1 day ago' "$archive"
+done
+EOF
+  chmod 755 /usr/local/bin/backup-shop-runtime
+  cat > /etc/systemd/system/gym-10-scripting-01-silent-backup.service <<'EOF'
+[Unit]
+Description=Create relative-time silent-backup fixtures
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/setup.sh runtime-silent-backup
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-10-scripting-01-silent-backup.service
+
+  # Cron deliberately cannot see this interactive-only helper path.
+  cat > /opt/shop/bin/backup-note <<'EOF'
+#!/bin/bash
+echo 'backup helper reached'
+EOF
+  chmod 755 /opt/shop/bin/backup-note
+  printf '\n# Shop backup helper available in interactive shells only.\nexport PATH="$PATH:/opt/shop/bin"\n' >> /home/juanes/.bashrc
+  chown juanes:juanes /home/juanes/.bashrc
+
+  # Keep the typo and missing execute bit, but constrain the mistaken archive
+  # to the shop tree: the missing cd is ignored and the unquoted glob splits.
+  cat > /usr/local/bin/backup-shop.sh <<'EOF'
+#!/bin/sh
+cd /srv/shop-data-misspelled
+archive=/var/backups/shop/shop-$(date +%F-%H%M%S).tar.gz
+tar -czf $archive /srv/shop-data/*
+backup-note
+echo 'Backup OK'
+exit 0
+EOF
+  chown juanes:juanes /usr/local/bin/backup-shop.sh
+  chmod 644 /usr/local/bin/backup-shop.sh
+}
+
+# At boot, establish mtimes against the actual session date, not image-build time.
+runtime_silent_backup() {
+  /usr/local/bin/backup-shop-runtime
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -601,6 +667,10 @@ EOF
 }
 
 main() {
+  if [[ ${1:-} == "runtime-silent-backup" ]]; then
+    runtime_silent_backup
+    exit 0
+  fi
   if [[ ${1:-} == "runtime-leaked-secret" ]]; then
     runtime_leaked_secret
     exit 0
@@ -634,6 +704,7 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
+  scripting_silent_backup
 }
 
 main "$@"
