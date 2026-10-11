@@ -560,6 +560,74 @@ fi
 EOF
 }
 
+# ══ 06-services / 01-crash-loop ════════════════════════════════════
+
+services_crash_loop() {
+  local app=/usr/local/bin/shop-api
+  mkdir -p /etc/shop-api /var/lib/shop-api
+
+  # This tiny service makes PORT the last application-level failure; no
+  # listener or extra package is needed to exercise systemd's restart policy.
+  cat > "$app" <<'EOF'
+#!/bin/bash
+if [[ -z ${PORT:-} ]]; then
+  echo 'shop-api: PORT is not set; refusing to start' >&2
+  exit 1
+fi
+while true; do
+  echo "shop-api: heartbeat on port $PORT"
+  sleep 2
+done
+EOF
+  # Deliberately leave the execute bit off to produce systemd's 203/EXEC.
+  chmod 644 "$app"
+
+  cat > /lib/systemd/system/shop-api.service <<'EOF'
+[Unit]
+Description=Shop API
+After=network.target
+StartLimitBurst=10
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/shop-api/shop-api.env
+ExecStart=/usr/local/bin/shop-api
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  cp /lib/systemd/system/shop-api.service /var/lib/shop-api/shop-api.service.pristine
+  cat > /var/lib/shop-api/teammate-note.txt <<'EOF'
+Teammate note: I changed the vendor unit Description from "Shop API" to
+"Shop API (temporary deploy fix)" after the manager loaded it. The pristine
+vendor copy is shop-api.service.pristine. Keep durable fixes in /etc.
+EOF
+
+  # The boot fixture loads the vendor definition first, then changes its
+  # Description without reloading systemd, reproducing the stale-manager warning.
+  cat > /usr/local/sbin/gym-shop-api-fixture <<'EOF'
+#!/bin/bash
+set -euo pipefail
+systemctl start shop-api.service >/dev/null 2>&1 || true
+sed -i 's/^Description=Shop API$/Description=Shop API (temporary deploy fix)/' \
+  /lib/systemd/system/shop-api.service
+EOF
+  chmod 755 /usr/local/sbin/gym-shop-api-fixture
+  cat > /etc/systemd/system/gym-shop-api-fixture.service <<'EOF'
+[Unit]
+Description=Prepare the Shop API crash-loop exercise
+After=basic.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gym-shop-api-fixture
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable gym-shop-api-fixture.service >/dev/null
+}
+
 # ══ 02-files / 03-release-links ════════════════════════════════════
 
 files_release_links() {
@@ -649,10 +717,6 @@ EOF
 }
 
 main() {
-  if [[ ${1:-} == "runtime-release-links" ]]; then
-    runtime_release_links
-    exit 0
-  fi
   if [[ ${1:-} == "runtime-leaked-secret" ]]; then
     runtime_leaked_secret
     exit 0
@@ -686,7 +750,7 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
-  files_release_links
+  services_crash_loop
 }
 
 main "$@"
