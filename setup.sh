@@ -560,6 +560,66 @@ fi
 EOF
 }
 
+# ══ 09-resources / 01-slow-box ═════════════════════════════════════
+
+resources_slow_box() {
+  mkdir -p /usr/local/bin
+
+  # This report is useful work, but its CPU-bound render is unusually slow.
+  # It is bounded to twenty minutes and capped at one CPU so it cannot run away.
+  cat > /usr/local/bin/report-builder <<'EOF'
+#!/bin/bash
+start=$SECONDS
+while (( SECONDS - start < 1200 )); do :; done
+echo "report build completed"
+EOF
+  chmod 755 /usr/local/bin/report-builder
+  cat > /etc/systemd/system/report-builder.service <<'EOF'
+[Unit]
+Description=Generate the nightly sales report
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/report-builder
+Nice=0
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Deliberately over-allocates its 64 MiB cgroup limit. RestartSec and a
+  # disabled start limiter make each OOM visible without a frantic restart loop.
+  cat > /usr/local/bin/thumbnailer <<'EOF'
+#!/usr/bin/perl
+my @image_chunks;
+for (1 .. 100) {
+  push @image_chunks, "x" x (1024 * 1024);
+}
+select undef, undef, undef, 15;
+print "thumbnail complete\n";
+EOF
+  chmod 755 /usr/local/bin/thumbnailer
+  cat > /etc/systemd/system/thumbnailer.service <<'EOF'
+[Unit]
+Description=Build nightly product thumbnails
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/thumbnailer
+MemoryAccounting=yes
+MemoryMax=64M
+MemorySwapMax=0
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl enable report-builder.service thumbnailer.service
+}
+
 # ══ live processes: started at first interactive shell ═════════════
 
 install_live_launcher() {
@@ -634,6 +694,7 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
+  resources_slow_box
 }
 
 main "$@"
