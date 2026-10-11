@@ -1033,12 +1033,12 @@ main() {
   install_live_launcher
   install_disk_bloat_launcher
   install_leaked_secret_launcher
-  storage_phantom_full
-  packages_tampered_binary
-  scripting_silent_backup
-  resources_slow_box
-  services_crash_loop
   files_release_links
+  services_crash_loop
+  resources_slow_box
+  scripting_silent_backup
+  packages_tampered_binary
+  storage_phantom_full
 }
 
 main "$@"
