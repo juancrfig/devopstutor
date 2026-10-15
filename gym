@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gym — render a scenario's guide.md as paged t/c/q panes, with Leitner
 # spaced-repetition scheduling. Run in one tmux pane; run the scenario's
-# ./run.sh in another. Ledger: .gym-ledger  (relpath  box  next_due  applied).
+# ./run.sh in another. Ledger: .gym-ledger  (relpath  box  next_due  applied  streak5).
 set -euo pipefail
 
 clear
@@ -37,26 +37,43 @@ esac
 touch "$LEDGER" "$HISTORY"
 
 # ── ledger helpers ─────────────────────────────────────────────────
-led_field(){ awk -v k="$1" -v col="$2" '$1==k{val=$col; if(col==4 && val=="") val=0; print val; exit}' "$LEDGER" 2>/dev/null; }
+led_field(){ awk -v k="$1" -v col="$2" '$1==k{val=$col; if((col==4 || col==5) && val=="") val=0; print val; exit}' "$LEDGER" 2>/dev/null; }
 is_due(){ # key → due if unseen or next_due <= today
   local due; due=$(led_field "$1" 3); [[ -z "$due" || "$due" < "$TODAY" || "$due" == "$TODAY" ]]; }
-led_set(){ # key box next_due [applied]
+led_set(){ # key box next_due [applied [streak5]]
   touch "$LEDGER"
   local tmp; tmp=$(mktemp)
   awk -v k="$1" '$1!=k' "$LEDGER" > "$tmp"
-  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${4:-0}" >> "$tmp"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${4:-0}" "${5:-0}" >> "$tmp"
   mv "$tmp" "$LEDGER"
 }
 reschedule(){ # key grade
-  local key=$1 grade=$2 box nb
+  local key=$1 grade=$2 box nb streak5 days due
   box=$(led_field "$key" 2); box=${box:-1}
+  streak5=$(led_field "$key" 5); streak5=${streak5:-0}
   case "$grade" in
-    pass)     nb=$(( box+1>5 ? 5 : box+1 ));;
-    struggle) nb=$box;;
-    fail)     nb=1;;
+    pass)
+      if (( box >= 5 )); then
+        nb=5
+        (( streak5 += 1 ))
+      else
+        nb=$(( box + 1 ))
+        streak5=0
+      fi
+      ;;
+    struggle)
+      nb=$box
+      (( box < 5 )) && streak5=0
+      ;;
+    fail)
+      nb=1
+      streak5=0
+      ;;
   esac
-  local due; due=$(date -d "+${INTERVALS[$nb]} days" +%F)
-  led_set "$key" "$nb" "$due" 0
+  days=${INTERVALS[$nb]}
+  (( nb == 5 )) && (( days += streak5 * 7 ))
+  due=$(date -d "+${days} days" +%F)
+  led_set "$key" "$nb" "$due" 0 "$streak5"
   printf '%s\t%s\t%s\t%s\t%s\n' "$TODAY" "$key" "$grade" "$box" "$nb" >> "$HISTORY"
   printf '%s✓ %s → box %s, next due %s%s\n' "$g" "$grade" "$nb" "$due" "$r"
 }
@@ -69,16 +86,18 @@ apply_overdue_penalties(){
   sec_today=$(date -u -d "$TODAY" +%s)
   tmp=$(mktemp)
 
-  local key box next_due applied
-  while IFS=$'\t' read -r key box next_due applied || [[ -n "$key" ]]; do
+  local key box next_due applied streak5
+  while IFS=$'\t' read -r key box next_due applied streak5 || [[ -n "$key" ]]; do
     [[ -z "$key" ]] && continue
     key=${key%$'\r'}
     box=${box%$'\r'}
     next_due=${next_due%$'\r'}
     applied=${applied%$'\r'}
+    streak5=${streak5%$'\r'}
 
     box=${box:-1}
     applied=${applied:-0}
+    streak5=${streak5:-0}
 
     if [[ -n "$next_due" && "$next_due" < "$TODAY" ]]; then
       local sec_due
@@ -89,6 +108,7 @@ apply_overdue_penalties(){
         if (( delta > 0 )); then
           new_box=$(( box - delta < 1 ? 1 : box - delta ))
           if (( new_box < box )); then
+            (( box >= 5 && new_box < 5 )) && streak5=0
             drops+=("$key"$'\t'"$box"$'\t'"$new_box"$'\t'"$total_overdue")
             printf '%s\t%s\t%s\t%s\t%s\n' "$TODAY" "$key" "overdue_drop" "$box" "$new_box" >> "$HISTORY"
           fi
@@ -97,7 +117,7 @@ apply_overdue_penalties(){
         fi
       fi
     fi
-    printf '%s\t%s\t%s\t%s\n' "$key" "$box" "$next_due" "$applied" >> "$tmp"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$key" "$box" "$next_due" "$applied" "$streak5" >> "$tmp"
   done < "$LEDGER"
   mv "$tmp" "$LEDGER"
 
@@ -136,8 +156,13 @@ pick_scenario(){
     ((${#key} > width)) && width=${#key}
   done
   for gm in "${due[@]}"; do
-    local key box next_box next_days; key=$(dirname "${gm#./}"); box=$(led_field "$key" 2); box=${box:-1}
-    next_box=$(( box+1>5 ? 5 : box+1 )); next_days=${INTERVALS[$next_box]}
+    local key box next_box next_days streak5; key=$(dirname "${gm#./}"); box=$(led_field "$key" 2); box=${box:-1}
+    if (( box >= 5 )); then
+      streak5=$(led_field "$key" 5); streak5=${streak5:-0}
+      next_days=$(( INTERVALS[5] + (streak5 + 1) * 7 ))
+    else
+      next_box=$(( box + 1 )); next_days=${INTERVALS[$next_box]}
+    fi
     printf '  %s%d%s  %-*s      %s%sAgain in %s days%s\n' "$c" "$i" "$r" "$width" "$key" "$s" "$it" "$next_days" "$r"; ((i+=1))
   done
   printf '\nPick (q to quit): '; read -r n
