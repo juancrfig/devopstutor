@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gym — render a scenario's guide.md as paged t/c/q panes, with Leitner
 # spaced-repetition scheduling. Run in one tmux pane; run the scenario's
-# ./run.sh in another. Ledger: .gym-ledger  (relpath  box  next_due).
+# ./run.sh in another. Ledger: .gym-ledger  (relpath  box  next_due  applied).
 set -euo pipefail
 
 clear
@@ -37,14 +37,14 @@ esac
 touch "$LEDGER" "$HISTORY"
 
 # ── ledger helpers ─────────────────────────────────────────────────
-led_field(){ awk -v k="$1" -v col="$2" '$1==k{print $col; exit}' "$LEDGER" 2>/dev/null; }
+led_field(){ awk -v k="$1" -v col="$2" '$1==k{val=$col; if(col==4 && val=="") val=0; print val; exit}' "$LEDGER" 2>/dev/null; }
 is_due(){ # key → due if unseen or next_due <= today
   local due; due=$(led_field "$1" 3); [[ -z "$due" || "$due" < "$TODAY" || "$due" == "$TODAY" ]]; }
-led_set(){ # key box next_due
+led_set(){ # key box next_due [applied]
   touch "$LEDGER"
   local tmp; tmp=$(mktemp)
   awk -v k="$1" '$1!=k' "$LEDGER" > "$tmp"
-  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$tmp"
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${4:-0}" >> "$tmp"
   mv "$tmp" "$LEDGER"
 }
 reschedule(){ # key grade
@@ -56,9 +56,67 @@ reschedule(){ # key grade
     fail)     nb=1;;
   esac
   local due; due=$(date -d "+${INTERVALS[$nb]} days" +%F)
-  led_set "$key" "$nb" "$due"
+  led_set "$key" "$nb" "$due" 0
   printf '%s\t%s\t%s\t%s\t%s\n' "$TODAY" "$key" "$grade" "$box" "$nb" >> "$HISTORY"
   printf '%s✓ %s → box %s, next due %s%s\n' "$g" "$grade" "$nb" "$due" "$r"
+}
+
+# ── overdue drop penalty ───────────────────────────────────────────
+DROPPED_COUNT=0
+apply_overdue_penalties(){
+  [[ -s "$LEDGER" ]] || return 0
+  local sec_today tmp drops=()
+  sec_today=$(date -u -d "$TODAY" +%s)
+  tmp=$(mktemp)
+
+  local key box next_due applied
+  while IFS=$'\t' read -r key box next_due applied || [[ -n "$key" ]]; do
+    [[ -z "$key" ]] && continue
+    key=${key%$'\r'}
+    box=${box%$'\r'}
+    next_due=${next_due%$'\r'}
+    applied=${applied%$'\r'}
+
+    box=${box:-1}
+    applied=${applied:-0}
+
+    if [[ -n "$next_due" && "$next_due" < "$TODAY" ]]; then
+      local sec_due
+      if sec_due=$(date -u -d "$next_due" +%s 2>/dev/null); then
+        local total_overdue delta new_box
+        total_overdue=$(( (sec_today - sec_due) / 86400 ))
+        delta=$(( total_overdue - applied ))
+        if (( delta > 0 )); then
+          new_box=$(( box - delta < 1 ? 1 : box - delta ))
+          if (( new_box < box )); then
+            drops+=("$key"$'\t'"$box"$'\t'"$new_box"$'\t'"$total_overdue")
+            printf '%s\t%s\t%s\t%s\t%s\n' "$TODAY" "$key" "overdue_drop" "$box" "$new_box" >> "$HISTORY"
+          fi
+          box=$new_box
+          applied=$total_overdue
+        fi
+      fi
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$key" "$box" "$next_due" "$applied" >> "$tmp"
+  done < "$LEDGER"
+  mv "$tmp" "$LEDGER"
+
+  DROPPED_COUNT=${#drops[@]}
+  (( DROPPED_COUNT )) || return 0
+
+  printf '%sOverdue Level Drops%s\n\n' "$b" "$r"
+  local width=0 item k ob nb od
+  for item in "${drops[@]}"; do
+    IFS=$'\t' read -r k ob nb od <<< "$item"
+    ((${#k} > width)) && width=${#k}
+  done
+  for item in "${drops[@]}"; do
+    IFS=$'\t' read -r k ob nb od <<< "$item"
+    local s_od="days"
+    (( od == 1 )) && s_od="day"
+    printf '  %-*s      %sbox %s → %s%s %s(%d %s overdue)%s\n' "$width" "$k" "$y" "$ob" "$nb" "$r" "$d" "$od" "$s_od" "$r"
+  done
+  printf '\n'
 }
 
 # ── pick a due scenario ────────────────────────────────────────────
@@ -172,11 +230,19 @@ run_guide(){
   done
 }
 
+apply_overdue_penalties
+
 if (($#)); then
   pick_requested_guide "$1"
+  if (( DROPPED_COUNT > 0 )); then
+    printf '%sPress any key to open guide (or q to quit)...%s' "$d" "$r"
+    read -rsn1 k
+    [[ "$k" == q ]] && exit 0
+  fi
   run_guide
 else
   while pick_scenario; do
     run_guide
   done
 fi
+
