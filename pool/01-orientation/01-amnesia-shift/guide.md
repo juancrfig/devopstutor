@@ -1,15 +1,11 @@
 # Amnesia Shift
 
 ## TICKET
-You're paged onto a server you've never touched. The previous admin, Dana,
-left for vacation and is unreachable. Their handover note (it greets you at
-login) claims: CentOS 7, 64 cores, 128G RAM, 400+ days of uptime, everyone
-uses zsh, "nothing weird in my session history."
+You are paged onto an unfamiliar server. The previous admin's handover note appears at login and claims the machine runs CentOS 7, has 64 cores and 128 GB RAM, has been up for over 400 days, and uses zsh for every user. It also claims the shared admin account has an unremarkable command history.
 
-Trust nothing. Verify every single claim against the box itself. Dana
-worked from the same admin account you're logged into now, so their
-session history is yours to dig through — decide if anything in it
-deserves escalation.
+1. Verify each claim against the running system. Record the actual OS, architecture, CPU count, memory, uptime, and login-shell evidence, distinguishing observations from the handover's claims.
+2. Review the command history available to your current account, which Dana also used. Identify any entries that warrant investigation and explain why, or explicitly report that none do.
+3. Summarize the discrepancies and any follow-up risks. Do not change the machine while investigating.
 
 ## COMMANDS
 uname uptime free lscpu cat command -v history
