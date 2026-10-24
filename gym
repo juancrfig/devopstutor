@@ -224,6 +224,32 @@ edit_answers(){
   ANSWERS=$(section ANSWERS)
 }
 
+# Preview the same Leitner transitions used by reschedule, without writing state.
+preview_schedule(){
+  local grade=$1 box nb streak5 days
+  box=$(led_field "$KEY" 2); box=${box:-1}
+  streak5=$(led_field "$KEY" 5); streak5=${streak5:-0}
+  case "$grade" in
+    pass)
+      if (( box >= 5 )); then
+        nb=5
+        (( streak5 += 1 ))
+      else
+        nb=$(( box + 1 ))
+        streak5=0
+      fi ;;
+    struggle)
+      nb=$box
+      (( box < 5 )) && streak5=0 ;;
+    fail)
+      nb=1
+      streak5=0 ;;
+  esac
+  days=${INTERVALS[$nb]}
+  (( nb == 5 )) && (( days += streak5 * 7 ))
+  printf '%s' "$days"
+}
+
 grade_prompt(){
   printf '%s%sGrade this ticket%s  %s(weakest of practical + theory)%s\n\n' "$clr" "$b" "$r" "$d" "$r"
   if ((PEEKED)); then
@@ -233,6 +259,10 @@ grade_prompt(){
   fi
   printf '  %s[s]truggle%s solved it, but slow or shaky on theory\n' "$y" "$r"
   printf '  %s[f]ail%s     lost on the box or the questions\n\n' "$c" "$r"
+  printf '\n%sNext review if you choose:%s\n' "$b" "$r"
+  printf '  %sPass%s       in %s days\n' "$g" "$r" "$(preview_schedule pass)"
+  printf '  %sStruggle%s   in %s days\n' "$y" "$r" "$(preview_schedule struggle)"
+  printf '  %sFail%s       in %s days\n\n' "$c" "$r" "$(preview_schedule fail)"
   local k; read -rsn1 k
   case "$k" in
     p) if ((PEEKED)); then printf '%sanswers were opened: recorded as struggle%s\n' "$y" "$r"; reschedule "$KEY" struggle
