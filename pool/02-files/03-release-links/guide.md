@@ -1,30 +1,10 @@
 # Release Links
 
 ## TICKET
-
-After cleanup, the site is serving a 404. The active release link points to a
-release directory that no longer exists. The nginx-style configuration tree
-also has stale links. A teammate says deleting the archived API log name freed
-no space; the live and archived names are still visible on this box.
-
-1. Find every broken symlink under `/srv` and `/etc/nginx`. Save the paths to
-   `~/broken-links.txt`. Self-check: exactly 2 broken links.
-2. Restore the active release. The application uses `/srv/app/current` as a
-   symbolic link to select which release directory is active. Available releases
-   are stored under `/srv/app/releases/`, including `/srv/app/releases/v2`.
-   Currently, `/srv/app/current` points to a release directory that no longer
-   exists, causing the application to fail.
-
-   Update `/srv/app/current` so that it points to `/srv/app/releases/v2`.
-   Replace the existing symlink **atomically**, in a single filesystem operation,
-   without an intermediate state where `/srv/app/current` is missing. Prove
-   that `/srv/app/current` remains a symlink and resolves to release v2.
-   Do not modify or copy the contents of the release directories.
-3. Compare the live and archived API log names and record the inode, link count,
-   and starting filesystem usage in `~/release-report.txt`. Remove the archived
-   name and prove usage does not change; find the remaining name for that same
-   inode, then remove it. Append the final usage. Self-check: at least 20M
-   becomes available after the final link is removed.
+The site returns 404 after cleanup.
+1. Save every broken symlink under `/srv` and `/etc/nginx` in `~/broken-links.txt` (exactly two).
+2. Restore `/srv/app/current` to point at `/srv/app/releases/v2`, replacing the link atomically without an absent intermediate state. Verify the link and target; leave release contents untouched.
+3. In `~/release-report.txt`, record inode, link count and disk usage for the live and archived API log names. Remove the archive name, demonstrate usage is unchanged, then remove the remaining name for that inode and record freed space (at least 20 MB).
 
 ## COMMANDS
 
