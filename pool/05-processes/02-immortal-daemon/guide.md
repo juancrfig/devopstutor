@@ -1,22 +1,11 @@
 # Immortal Daemon
 
 ## TICKET
-A rogue "watchdog" from a long-gone vendor is running on this box. Every
-attempt the last admin made to stop it politely failed — it even mocks them
-in `/var/log/watchdog.log`. Worse: on the one occasion it *did* die, it was
-back seconds later, like nothing happened.
-
-Take it down for good, and document the kill chain in `~/takedown.txt`:
-1. Locate the watchdog and watch its log live while you send it the
-   standard polite termination signal. Record what it does with it.
-2. Explain in the report *how* a process can survive that signal — and
-   name the one signal no process can ignore. Use it. Record what happens
-   in the seconds after.
-3. It came back. Find out *why*: map the ancestry, identify its guardian,
-   and decide the correct kill order to end the pair permanently.
-4. Prove the box is clean: no watchdog, no guardian, log silent. Append
-   the final evidence, including how you verified absence rather than
-   presence.
+A retired watchdog ignores polite termination and returns after being killed; its log is `/var/log/watchdog.log`. Document in `~/takedown.txt`.
+1. Identify it, observe its log while requesting normal termination and record the response.
+2. Explain how it can ignore that signal; force termination with an uncatchable signal and record what follows.
+3. Find the process that restores it and stop the pair in an order that prevents respawning.
+4. Prove both processes are absent and the log stays quiet.
 
 ## COMMANDS
 ps pgrep pstree kill tail grep
