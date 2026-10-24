@@ -271,6 +271,7 @@ grade_prompt(){
 
 run_guide(){
   load_guide
+  clear  # Remove the ticket picker before showing the selected ticket.
   # run.sh reads this last-served ticket to decide whether slow-box jobs start.
   printf '%s\n' "${KEY#pool/}" > "$ROOT/.gym-active"
   local view=t k
