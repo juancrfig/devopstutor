@@ -1,25 +1,12 @@
 # Silent Backup
 
 ## TICKET
-The nightly shop backup has been reported as healthy for weeks, but a restore
-check found the archives empty. The job runs from your account, and the data is
-in `/srv/shop-data`.
-
-1. Inspect the existing archives without extracting them. There are exactly
-   two recent archives; compare their contents with the source tree and record
-   your findings in `~/backup-report.txt`.
-2. Make the backup script fail loudly: a failed operation must produce a
-   non-zero exit status and no success message. Run it once with a deliberately
-   invalid source path and record the exit status in your report.
-3. Repair the script so it archives the intended data, including
-   `customer notes.txt`. Inspect the new archive and verify the space-containing
-   filename is present.
-4. Restore just `customer notes.txt` into `/tmp/restore`, then prove it is
-   identical to the original.
-5. Schedule the backup every minute in your own account, with output appended
-   to `~/backup-cron.log`. It will fail when first run by the scheduler. Find
-   the cause, correct it without hiding errors, and prove two successful
-   scheduled runs in the log.
+Nightly backups report success, but restore tests find empty archives. Source data is in `/srv/shop-data`.
+1. Inspect the two recent archives without extracting them. Compare their contents to the source tree and record findings in `~/backup-report.txt`.
+2. Ensure the backup script exits nonzero and never prints success after a required operation fails. Test an invalid source path and record its exit status.
+3. Repair the archive to include intended data, including `customer notes.txt`. Verify that file appears in the archive.
+4. Restore only `customer notes.txt` to `/tmp/restore` and prove it matches the source exactly.
+5. Schedule the backup every minute under your account with output appended to `~/backup-cron.log`. Diagnose and fix the initial scheduler-only failure without hiding errors; prove two successful scheduled runs.
 
 ## COMMANDS
 bash chmod echo $? set tar cmp diff crontab env export command -v vim cat ls grep
