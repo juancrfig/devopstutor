@@ -253,16 +253,12 @@ preview_schedule(){
 grade_prompt(){
   printf '%s%sGrade this ticket%s  %s(weakest of practical + theory)%s\n\n' "$clr" "$b" "$r" "$d" "$r"
   if ((PEEKED)); then
-    printf '  %s[p]ass      not available: you opened your answers%s\n' "$d" "$r"
+    printf '  %s[p]ass%s      unavailable (answers opened)\n' "$d" "$r"
   else
-    printf '  %s[p]ass%s     nailed box + could answer the questions\n' "$g" "$r"
+    printf '  %s[p]ass%s      in %s days\n' "$g" "$r" "$(preview_schedule pass)"
   fi
-  printf '  %s[s]truggle%s solved it, but slow or shaky on theory\n' "$y" "$r"
-  printf '  %s[f]ail%s     lost on the box or the questions\n\n' "$c" "$r"
-  printf '\n%sNext review if you choose:%s\n' "$b" "$r"
-  printf '  %sPass%s       in %s days\n' "$g" "$r" "$(preview_schedule pass)"
-  printf '  %sStruggle%s   in %s days\n' "$y" "$r" "$(preview_schedule struggle)"
-  printf '  %sFail%s       in %s days\n\n' "$c" "$r" "$(preview_schedule fail)"
+  printf '  %s[s]truggle%s  in %s days\n' "$y" "$r" "$(preview_schedule struggle)"
+  printf '  %s[f]ail%s      in %s days\n\n' "$c" "$r" "$(preview_schedule fail)"
   local k; read -rsn1 k
   case "$k" in
     p) if ((PEEKED)); then printf '%sanswers were opened: recorded as struggle%s\n' "$y" "$r"; reschedule "$KEY" struggle
