@@ -1,21 +1,10 @@
 # Mystery Artifacts
 
 ## TICKET
-Security flagged anomalous activity on this box between **02:00 and 03:00
-on 2026-07-25**. The deploy tree at `/srv/deploy` is the suspected target.
-The deploy pipeline itself last ran well before 02:00, and a legitimate
-cron job wrote one file after 03:00 — everything else touched inside the
-window is hostile until proven otherwise.
-
-Forensics, without modifying any evidence:
-1. Build a timeline: every file under `/srv/deploy` — including anything
-   hidden — with its exact modification time, saved to `~/timeline.txt`.
-2. Isolate the files modified strictly inside the incident window. Tip:
-   you can fabricate reference files carrying any timestamp you want, and
-   compare against them.
-3. One planted file masquerades as an image. Prove what it actually is,
-   and append the proof plus the full list of planted paths to
-   `~/timeline.txt`.
+Security detected suspicious changes to `/srv/deploy` strictly between 02:00 and 03:00 on 2026-07-25. Preserve evidence.
+1. Save exact modification times for every file, including hidden files, in `~/timeline.txt`.
+2. Identify only files modified strictly inside the incident window.
+3. Determine the actual format of the suspicious file disguised as an image; append that evidence and all incident-window paths. Do not modify evidence.
 
 ## COMMANDS
 find stat ls file touch wc

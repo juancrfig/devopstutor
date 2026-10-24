@@ -1,22 +1,14 @@
 # Log Triage
 
 ## TICKET
-Checkout is degraded and customer support is on fire. The shop's access log
-lives at `/var/log/shop/access.log` — and it's still growing, because the
-incident is live right now.
+Checkout is degraded during a live incident. Requests continue arriving in `/var/log/shop/access.log`. Customer support needs an evidence-based report.
 
-Triage it and write an incident report to `~/storm-report.txt`, building it
-up section by section (append — don't clobber your own report):
-1. Watch the log grow in real time for a moment. Confirm whether errors are
-   still being produced *right now*.
-2. How many requests total, and how many returned status 500?
-3. Which endpoint is producing the 500s? Prove it with a count per endpoint,
-   highest first.
-4. One client IP is hammering the service far harder than everyone else.
-   Produce a ranked "requests per IP" table. Everything so far must be done
-   with pipelines only — no editors, no temporary files.
-5. Extract the top offender's full request lines into `~/evidence.log` for
-   the abuse desk, and record how many lines that is in the report.
+Build `~/storm-report.txt` section by section, preserving earlier sections:
+1. Observe new log entries arriving. Determine whether HTTP 500 responses are still occurring during your observation, and record the evidence.
+2. Record the total number of requests and the number returning HTTP 500.
+3. Identify every endpoint returning HTTP 500. Rank endpoints by error count, highest first.
+4. Rank client IPs by request count, highest first, and identify the busiest. Complete steps 1–4 using pipelines, without editors or temporary files.
+5. Save the busiest IP's full log entries in `~/evidence.log` and record the number of saved lines in the report. Repeating extraction must not duplicate evidence.
 
 ## COMMANDS
 tail head cat grep cut sort uniq wc echo tr

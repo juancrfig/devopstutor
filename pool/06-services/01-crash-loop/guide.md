@@ -1,12 +1,12 @@
 # Shop API Crash Loop
 
 ## TICKET
-After last night's deploy, `shop-api` is down. A teammate "fixed" the vendor unit file, but the change has not taken effect. Bring the API back safely:
-1. Find what failed on this box. Save the unit's status and its last 20 log lines for this unit only to `~/service-report.txt`.
-2. Fix each cause in turn. After every fix, capture the log line that proves the next failure in `~/service-report.txt`. There are five causes; don't stop when the unit first becomes active.
-3. Put durable unit changes in an `/etc` override, not the vendor file. Revert the teammate's vendor edit using the pristine copy and note under `/var/lib/shop-api/` as your reference.
-4. Make the service start at boot and recover after a crash. Prove recovery by killing its main process and showing that a new PID is active.
-5. Show only this unit's error-level messages from the current boot.
+The `shop-api` service failed after deployment; a vendor-unit edit has not taken effect.
+1. Save unit status and last 20 unit-specific log lines in `~/service-report.txt`.
+2. Resolve all five failure causes, appending evidence of the next problem after each fix; do not stop at a briefly active service.
+3. Restore the vendor unit from the pristine reference under `/var/lib/shop-api/`; keep local changes in an `/etc` override.
+4. Enable boot startup and crash recovery, proving recovery with a new main PID after killing the old one.
+5. Display current-boot error-level messages for this unit only.
 
 ## COMMANDS
 systemctl status start stop restart enable is-enabled is-active cat edit daemon-reload show journalctl -u -b -p -n -f --since sudo chmod ls cat kill ps

@@ -1,27 +1,14 @@
 # Disk Bloat
 
 ## TICKET
-Monitoring fired: the `/var/appdata` filesystem crossed its usage threshold
-overnight. The app team swears they "only write small session files" under
-`/var/appdata`. Nobody knows where the space went.
+Monitoring reports unexpected disk usage under `/var/appdata`. The app team believes it stores only small session files there. A separate alert says `/var/log/appsvc` is nearly full.
 
-Produce evidence, then clean up:
-1. Find the three files actually eating the space — prove it with numbers,
-   largest first, written to `~/bloat-report.txt`.
-2. One file in there looks enormous in a directory listing but barely
-   occupies disk. Explain the discrepancy in one appended line.
-3. The tree is littered with stale `.tmp` session files and empty `.csv`
-   exports. Delete all of them in bulk — no manual one-by-one deletion —
-   but nothing else. Count the number of files targeted for deletion beforehand. 
-4. `releases/v1/backup.log` refuses to open as text. Determine what it
-   really is before deciding its fate.
-5. There's a file whose name contains spaces. Remove it without renaming it.
-6. A second alert: `/var/log/appsvc` is nearly full too. A teammate already
-   deleted the service's huge log to fix it, but the alert never cleared and
-   nobody can find what is using the space. Free the space without stopping
-   or restarting the service. Append before/after usage numbers to the report
-   and show the service is still running afterwards. Self-check: about 35M
-   comes back.
+1. Identify the three largest space-consuming files under `/var/appdata`. Save their paths and sizes in descending order to `~/bloat-report.txt`.
+2. Find the file whose apparent size is much larger than its actual disk usage. Append both measurements and a short explanation to the report.
+3. Count stale `.tmp` session files and zero-byte `.csv` exports, then delete only those matching files in bulk. Record the count before deletion and verify the targeted files are gone.
+4. Investigate `releases/v1/backup.log`, which cannot be read as ordinary text. Identify its actual format and record the finding before taking any action on it.
+5. Remove the file with spaces in its name without renaming it or affecting neighboring files.
+6. Investigate why disk usage remains high after a teammate deleted the service's log filename under `/var/log/appsvc`. Reclaim the space without stopping or restarting the service. Append before-and-after usage and proof the service remains running. Self-check: roughly 35 MB is recovered.
 
 ## COMMANDS
 df du ls find file stat sort head truncate wc xargs -print0 rm lsof ps

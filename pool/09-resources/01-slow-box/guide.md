@@ -1,24 +1,11 @@
 # Slow Box
 
 ## TICKET
-Users report that the box has become sluggish, and last night's thumbnail job
-"keeps dying for no reason." Find the evidence before changing either job.
-
-1. Save a triage snapshot to `~/slow-report.txt`: the load average, the memory
-   summary with an explanation of what **available** means, and the top five CPU
-   and top five memory consumers. Do not draw conclusions from the box's total
-   memory or CPU count; those figures belong to the host. The summary and
-   process views may rank consumers differently, so make clear which view each
-   list represents.
-2. Find the service responsible for the CPU load. It is a real report that
-   must finish, so lower its priority rather than stopping it. Prove the new
-   nice value, then make that priority permanent in the unit.
-3. Find why the thumbnail job keeps dying. Use the service manager's result,
-   restart count and configured memory limit as evidence; record all three in
-   `~/slow-report.txt`.
-4. Raise the memory limit in an override to let the job finish. Also correct
-   its restart policy so a successful completion stays stopped. Prove the
-   completion in its log and show that the restart count no longer increases.
+Users report a sluggish box; the thumbnail job repeatedly dies. Investigate before changing workloads.
+1. Save load averages, a memory summary explaining "available," and the top five CPU and memory consumers in `~/slow-report.txt`. Label each view; host-wide CPU and RAM totals are not the container's limits.
+2. Identify the service consuming CPU. Lower its priority without stopping its required work, prove the effective priority and make the change persistent in its unit.
+3. Record the thumbnail service's failure result, restart count and configured memory limit.
+4. Increase its memory allowance enough to finish and ensure successful completion does not restart it. Verify completion in logs and that the restart count stops increasing.
 
 ## COMMANDS
 uptime free top ps nice renice systemctl journalctl
